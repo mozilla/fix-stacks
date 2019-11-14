@@ -1,0 +1,18 @@
+[package]
+name = "fix-stacks"
+version = "0.1.0"
+authors = ["Nicholas Nethercote <nnethercote@mozilla.com>"]
+edition = "2018"
+license = "MIT/Apache-2.0"
+
+[dependencies]
+fxhash = "0.2.1"
+regex = "1.0"
+
+# FIXME(https://github.com/mozilla/fix-stacks/issues/2): at the time of
+# writing, 6.1.4 is the latest version of `symbolic` on crates.io, but this dev
+# version of 7.0.0 fixes some API botches (`ObjectDebugSession::functions()`
+# being private). Once 7.0.0 is released, we can switch to it.
+symbolic-common = { git = "https://github.com/getsentry/symbolic/", rev = "d217a9340df3bbd373323b732880a95e6de353bf" }
+symbolic-debuginfo = { git = "https://github.com/getsentry/symbolic/", rev = "d217a9340df3bbd373323b732880a95e6de353bf" }
+symbolic-demangle = { git = "https://github.com/getsentry/symbolic/", rev = "d217a9340df3bbd373323b732880a95e6de353bf" }
