@@ -1,88 +1,78 @@
+// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
+// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
+// http://opensource.org/licenses/MIT>, at your option. This file may not be
+// copied, modified, or distributed except according to those terms.
+
 use crate::Fixer;
 
 #[test]
-fn test1() {
+fn test_linux() {
     let mut fixer = Fixer::new();
 
-    // The debuginfo within `example` is as follows.
+    // The debuginfo within `example-linux` is as follows.
     //
-    // FUNCTIONS
+    //   FUNC 0x1130 size=40 func=main
+    //   LINE 0x1130 line=24 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x113f line=25 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x1146 line=26 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x114f line=27 file=/home/njn/moz/fix-stacks/tests/example.c
     //
-    //   addr   size  mangled-name
-    //   ----   ----  ------------
-    //   0x43a0 440   _ZN7example4main17h28effd2b7f9f10b9E
+    //   FUNC 0x1160 size=69 func=f
+    //   LINE 0x1160 line=16 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x116c line=17 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x1177 line=18 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x1180 line=19 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x118b line=20 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x1194 line=21 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x119f line=22 file=/home/njn/moz/fix-stacks/tests/example.c
     //
-    // LINES
-    //
-    //   addr   line  file
-    //   ----   ----  ----
-    //   0x43a0   22  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x43a7   23  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x43b4    0  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x43b9   24  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x43d3    0  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x43df   15  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x43ea   16  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x43f4    9  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4419   10  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4456   17  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4472    0  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x447e   17  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4489   18  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4493    9  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x44b8   10  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x44f5   19  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x450f   15  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4521   17  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4533   19  /home/njn/moz/fix-stacks/tests/example.rs
-    //   0x4550   25  /home/njn/moz/fix-stacks/tests/example.rs
-    //
-    // Yes, rustc really does produce debuginfo with some 0 line numbers. See
-    // https://github.com/rust-lang/rust/issues/65487 for more.
+    //   FUNC 0x11b0 size=49 func=g
+    //   LINE 0x11b0 line=11 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x11bc line=12 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x11cd line=13 file=/home/njn/moz/fix-stacks/tests/example.c
+    //   LINE 0x11db line=14 file=/home/njn/moz/fix-stacks/tests/example.c
 
     // Test various addresses within `main`.
-    let mut main = |addr, linenum| {
-        let line = format!("#00: ???[tests/example +0x{:x}]", addr);
+    let mut func = |name, addr, linenum| {
+        let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
         let line = fixer.fix(line);
         assert_eq!(
             line,
             format!(
-                "#00: example::main (/home/njn/moz/fix-stacks/tests/example.rs:{})",
-                linenum
+                "#00: {} (/home/njn/moz/fix-stacks/tests/example.c:{})",
+                name, linenum
             )
         );
     };
-    main(0x43a0, 22);
-    main(0x43a1, 22);
-    main(0x43a2, 22);
-    main(0x43a3, 22);
-    main(0x43a4, 22);
-    main(0x43a5, 22);
-    main(0x43a6, 22);
-    main(0x43a7, 23);
-    main(0x43b4, 0);
-    main(0x43bd, 24);
-    main(0x43f4, 9);
-    main(0x4400, 9);
-    main(0x4500, 19);
-    main(0x450f, 15);
-    main(0x4550, 25);
-    main(0x4550, 25);
-    main(0x4557, 25);
+    func("main", 0x1130, 24);
+    func("main", 0x1131, 24);
+    func("main", 0x1132, 24);
+    func("main", 0x1137, 24);
+    func("main", 0x113a, 24);
+    func("main", 0x113d, 24);
+    func("main", 0x113e, 24);
+    func("main", 0x113f, 25);
+    func("main", 0x1146, 26);
+    func("main", 0x114e, 26);
+    func("main", 0x1157, 27);
+    func("f", 0x1160, 16);
+    func("f", 0x1180, 19);
+    func("g", 0x11bc, 12);
+    func("g", 0x11de, 14);
 
     // Try a new Fixer.
     fixer = Fixer::new();
 
     // Test various addresses outside `main`.
     let mut outside = |addr| {
-        let line = format!("#00: ???[tests/example +0x{:x}]", addr);
+        let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
         let line = fixer.fix(line);
-        assert_eq!(line, format!("#00: ??? (tests/example)",));
+        assert_eq!(line, format!("#00: ??? (tests/example-linux)",));
     };
     outside(0x0); // Well before the start of main.
     outside(0x999); // Well before the start of main.
-    outside(0x439f); // One byte before the start of `main`.
-    outside(0x4558); // One byte past the end of `main`.
+    outside(0x112f); // One byte before the start of `main`.
+    outside(0x1158); // One byte past the end of `main`.
     outside(0xfffffff); // Well past the end of main.
 
     // Test various different unchanged line forms.
@@ -92,14 +82,14 @@ fn test1() {
     };
     unchanged("");
     unchanged("1234 ABCD");
-    unchanged("00: ???[tests/example +0x43a0]"); // Missing the leading '#'.
-    unchanged("#00: ???[tests/example 0x43a0]"); // Missing the '+' before the address.
-    unchanged("#00: ???[tests/example +43a0]"); // Missing the '0x`.
-    unchanged("#00: ???(tests/example +0x43a0)"); // Wrong parentheses.
+    unchanged("00: ???[tests/example-linux +0x1130]"); // Missing the leading '#'.
+    unchanged("#00: ???[tests/example-linux 0x1130]"); // Missing the '+' before the address.
+    unchanged("#00: ???[tests/example-linux +1130]"); // Missing the '0x`.
+    unchanged("#00: ???(tests/example-linux +0x1130)"); // Wrong parentheses.
 
     // An error message is also printed to stderr for file errors, but we don't
     // test for that.
-    unchanged("#00: ???[tests/EXAMPLE +0x43a0]"); // No such file.
+    unchanged("#00: ???[tests/no-such-file +0x43a0]"); // No such file.
     unchanged("#00: ???[src/main.rs +0x43a0]"); // File exists, but has wrong format.
 
     // Test various different changed line forms.
@@ -108,15 +98,15 @@ fn test1() {
         assert_eq!(line2_expected, line2_actual);
     };
     changed(
-        "#01: foobar[tests/example +0x43a0]",
-        "#01: example::main (/home/njn/moz/fix-stacks/tests/example.rs:22)",
+        "#01: foobar[tests/example-linux +0x1130]",
+        "#01: main (/home/njn/moz/fix-stacks/tests/example.c:24)",
     );
     changed(
-        "PREFIX#9999: ???[tests/example +0x43a0]SUFFIX",
-        "PREFIX#9999: example::main (/home/njn/moz/fix-stacks/tests/example.rs:22)SUFFIX",
+        "PREFIX#9999: ???[tests/example-linux +0x1130]SUFFIX",
+        "PREFIX#9999: main (/home/njn/moz/fix-stacks/tests/example.c:24)SUFFIX",
     );
     changed(
-        "#01: ???[tests/../src/../tests/example +0x43a0]",
-        "#01: example::main (/home/njn/moz/fix-stacks/tests/example.rs:22)",
+        "#01: ???[tests/../src/../tests/example-linux +0x1130]",
+        "#01: main (/home/njn/moz/fix-stacks/tests/example.c:24)",
     );
 }

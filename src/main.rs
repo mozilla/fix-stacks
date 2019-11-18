@@ -155,6 +155,13 @@ impl Fixer {
             .functions()
             .filter_map(|function| {
                 let function = function.ok()?;
+                // This eprintln! is useful when creating tests.
+                //eprintln!(
+                //    "FILE 0x{:x} size={} func={}",
+                //    function.address,
+                //    function.size,
+                //    function.name.as_str()
+                //);
                 Some(FuncInfo {
                     address: function.address,
                     size: function.size,
@@ -162,10 +169,19 @@ impl Fixer {
                     line_infos: function
                         .lines
                         .into_iter()
-                        .map(|line| LineInfo {
-                            address: line.address,
-                            line: line.line,
-                            path: interner.intern(line.file.path_str()),
+                        .map(|line| {
+                            // This eprintln! is useful when creating tests.
+                            //eprintln!(
+                            //    "LINE 0x{:x} line={} file={}",
+                            //    line.address,
+                            //    line.line,
+                            //    line.file.path_str()
+                            //);
+                            LineInfo {
+                                address: line.address,
+                                line: line.line,
+                                path: interner.intern(line.file.path_str()),
+                            }
                         })
                         .collect(),
                 })
