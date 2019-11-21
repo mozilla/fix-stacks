@@ -116,19 +116,19 @@ fn test_json_linux() {
     // The debuginfo within `example-json-linux` is as follows.
     //
     //   FUNC 0x1130 size=45 func=main
-    //   LINE 0x1130 line=11 file=/home/njn/moz/fix-stacks/tests/example"json.c
-    //   LINE 0x113f line=12 file=/home/njn/moz/fix-stacks/tests/example"json.c
-    //   LINE 0x1155 line=13 file=/home/njn/moz/fix-stacks/tests/example"json.c
+    //   LINE 0x1130 line=16 file=/home/njn/moz/fix-stacks/tests/example"json.c
+    //   LINE 0x113f line=17 file=/home/njn/moz/fix-stacks/tests/example"json.c
+    //   LINE 0x1155 line=18 file=/home/njn/moz/fix-stacks/tests/example"json.c
 
     let line = "#00: ???[tests/example-json-linux +0x1130]";
 
     // Test without JSON escaping.
     let mut fixer = Fixer::new(JsonEscaping::No);
-    let expected = "#00: main (/home/njn/moz/fix-stacks/tests/example\"json.c:12)";
+    let expected = "#00: main (/home/njn/moz/fix-stacks/tests/example\"json.c:16)";
     assert_eq!(expected, fixer.fix(line.to_string()));
 
     // Test with JSON escaping.
     let mut fixer = Fixer::new(JsonEscaping::Yes);
-    let expected = "#00: main (/home/njn/moz/fix-stacks/tests/example\\\"json.c:12)";
+    let expected = "#00: main (/home/njn/moz/fix-stacks/tests/example\\\"json.c:16)";
     assert_eq!(expected, fixer.fix(line.to_string()));
 }
