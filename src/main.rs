@@ -48,6 +48,11 @@ impl Interner {
     }
 }
 
+enum JsonEscaping {
+    No,
+    Yes,
+}
+
 /// Debug info for a single line.
 struct LineInfo {
     address: u64,
@@ -126,15 +131,25 @@ impl FileInfo {
 struct Fixer {
     re: Regex,
     file_infos: FxHashMap<String, FileInfo>,
+    json_escaping: JsonEscaping,
 }
 
 impl Fixer {
-    fn new() -> Fixer {
+    fn new(json_escaping: JsonEscaping) -> Fixer {
         Fixer {
             // Matches lines produced by MozFormatCodeAddress().
             re: Regex::new(r"^(.*#\d+: )(.+)\[(.+) \+0x([0-9A-Fa-f]+)\](.*)$").unwrap(),
             file_infos: FxHashMap::default(),
+            json_escaping,
         }
+    }
+
+    fn json_escape(string: &str) -> String {
+        // Do the escaping.
+        let escaped = serde_json::to_string(string).unwrap();
+
+        // Strip the quotes.
+        escaped[1..escaped.len() - 1].to_string()
     }
 
     /// Read the data from `file_name` and construct a `FileInfo` that we can
@@ -157,7 +172,7 @@ impl Fixer {
                 let function = function.ok()?;
                 // This eprintln! is useful when creating tests.
                 //eprintln!(
-                //    "FILE 0x{:x} size={} func={}",
+                //    "FUNC 0x{:x} size={} func={}",
                 //    function.address,
                 //    function.size,
                 //    function.name.as_str()
@@ -170,7 +185,7 @@ impl Fixer {
                         .lines
                         .into_iter()
                         .map(|line| {
-                            // This eprintln! is useful when creating tests.
+                            // This eprintln! is also useful when creating tests.
                             //eprintln!(
                             //    "LINE 0x{:x} line={} file={}",
                             //    line.address,
@@ -207,7 +222,7 @@ impl Fixer {
         };
 
         let before = &captures[1];
-        let fn_name = &captures[2];
+        let func_name = &captures[2];
         let file_name = &captures[3];
         let address = u64::from_str_radix(&captures[4], 16).unwrap();
         let after = &captures[5];
@@ -225,23 +240,31 @@ impl Fixer {
             },
         };
 
-        if let Some(func_info) = file_info.func_info(address) {
-            let name = func_info.demangled_name();
+        let mut func_name_and_locn = if let Some(func_info) = file_info.func_info(address) {
             if let Some(line_info) = func_info.line_info(address) {
                 // We have the filename and line number from the debug info.
-                let path = file_info.interner.get(line_info.path);
-                format!("{}{} ({}:{}){}", before, name, path, line_info.line, after)
+                format!(
+                    "{} ({}:{})",
+                    func_info.demangled_name(),
+                    file_info.interner.get(line_info.path),
+                    line_info.line
+                )
             } else {
                 // We have the filename from the debug info, but no line number.
-                format!("{}{} ({}){}", before, name, file_name, after)
+                format!("{} ({})", func_info.demangled_name(), file_name)
             }
         } else {
             // We have nothing from the symbols or debug info. Use the file name
             // from original input, which is probably "???". The end result is the
             // same as the original line, but with the address removed and slightly
             // different formatting.
-            format!("{}{} ({}){}", before, fn_name, file_name, after)
+            format!("{} ({})", func_name, file_name)
+        };
+
+        if let JsonEscaping::Yes = self.json_escaping {
+            func_name_and_locn = Fixer::json_escape(&func_name_and_locn);
         }
+        format!("{}{}{}", before, func_name_and_locn, after)
     }
 }
 
@@ -253,14 +276,18 @@ Post-process the stack frames produced by MozFormatCodeAddress().
 
 options:
   -h, --help      show this message and exit
+  -j, --json      Use JSON escaping for printed function names and file names
 "##;
 
 fn main_inner() -> io::Result<()> {
     // Process command line arguments.
+    let mut json_escaping = JsonEscaping::No;
     for arg in env::args().skip(1) {
         if arg == "-h" || arg == "--help" {
             println!("{}", USAGE_MSG);
             return Ok(());
+        } else if arg == "-j" || arg == "--json" {
+            json_escaping = JsonEscaping::Yes;
         } else {
             let msg = format!(
                 "bad argument `{}`. Run `fix-stacks -h` for more information.",
@@ -272,7 +299,7 @@ fn main_inner() -> io::Result<()> {
 
     let reader = io::BufReader::new(io::stdin());
 
-    let mut fixer = Fixer::new();
+    let mut fixer = Fixer::new(json_escaping);
     for line in reader.lines() {
         writeln!(io::stdout(), "{}", fixer.fix(line.unwrap()))?;
     }
