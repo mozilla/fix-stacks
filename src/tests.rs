@@ -3,11 +3,11 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-use crate::Fixer;
+use crate::*;
 
 #[test]
 fn test_linux() {
-    let mut fixer = Fixer::new();
+    let mut fixer = Fixer::new(JsonEscaping::No);
 
     // The debuginfo within `example-linux` is as follows.
     //
@@ -61,19 +61,19 @@ fn test_linux() {
     func("g", 0x11de, 14);
 
     // Try a new Fixer.
-    fixer = Fixer::new();
+    fixer = Fixer::new(JsonEscaping::No);
 
-    // Test various addresses outside `main`.
+    // Test various addresses outside `main`, `f`, and `g`.
     let mut outside = |addr| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
         let line = fixer.fix(line);
-        assert_eq!(line, format!("#00: ??? (tests/example-linux)",));
+        assert_eq!(format!("#00: ??? (tests/example-linux)"), line);
     };
-    outside(0x0); // Well before the start of main.
+    outside(0x0); // A very low address.
     outside(0x999); // Well before the start of main.
     outside(0x112f); // One byte before the start of `main`.
     outside(0x1158); // One byte past the end of `main`.
-    outside(0xfffffff); // Well past the end of main.
+    outside(0xfffffff); // A very high address.
 
     // Test various different unchanged line forms.
     let mut unchanged = |line: &str| {
@@ -109,4 +109,26 @@ fn test_linux() {
         "#01: ???[tests/../src/../tests/example-linux +0x1130]",
         "#01: main (/home/njn/moz/fix-stacks/tests/example.c:24)",
     );
+}
+
+#[test]
+fn test_json_linux() {
+    // The debuginfo within `example-json-linux` is as follows.
+    //
+    //   FUNC 0x1130 size=45 func=main
+    //   LINE 0x1130 line=11 file=/home/njn/moz/fix-stacks/tests/example"json.c
+    //   LINE 0x113f line=12 file=/home/njn/moz/fix-stacks/tests/example"json.c
+    //   LINE 0x1155 line=13 file=/home/njn/moz/fix-stacks/tests/example"json.c
+
+    let line = "#00: ???[tests/example-json-linux +0x1130]";
+
+    // Test without JSON escaping.
+    let mut fixer = Fixer::new(JsonEscaping::No);
+    let expected = "#00: main (/home/njn/moz/fix-stacks/tests/example\"json.c:12)";
+    assert_eq!(expected, fixer.fix(line.to_string()));
+
+    // Test with JSON escaping.
+    let mut fixer = Fixer::new(JsonEscaping::Yes);
+    let expected = "#00: main (/home/njn/moz/fix-stacks/tests/example\\\"json.c:12)";
+    assert_eq!(expected, fixer.fix(line.to_string()));
 }

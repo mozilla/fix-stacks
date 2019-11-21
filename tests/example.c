@@ -3,7 +3,7 @@
 // `example-linux` was compiled on an Ubuntu 19.04 box using clang 8.0 with the
 // following command:
 //
-//   rustc -g example.rs -o example-linux
+//   clang -g example.rs -o example-linux
 //
 
 #include <stdio.h>
