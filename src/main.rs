@@ -71,6 +71,7 @@ struct FuncInfo {
     // duplicated.
     mangled_name: String,
 
+    // The `LineInfos` are sorted by `address`.
     line_infos: Box<[LineInfo]>,
 }
 
@@ -92,7 +93,7 @@ impl FuncInfo {
     fn line_info(&self, address: u64) -> Option<&LineInfo> {
         match self
             .line_infos
-            .binary_search_by_key(&address, |li| li.address)
+            .binary_search_by_key(&address, |line_info| line_info.address)
         {
             Ok(index) => Some(&self.line_infos[index]),
             Err(0) => None,
@@ -103,7 +104,8 @@ impl FuncInfo {
 
 /// Debug info for a single file.
 struct FileInfo {
-    func_infos: Box<[FuncInfo]>,
+    /// The `FuncInfo`s are sorted by `address`.
+    func_infos: Vec<FuncInfo>,
     interner: Interner,
 }
 
@@ -111,7 +113,7 @@ impl FileInfo {
     fn func_info(&self, address: u64) -> Option<&FuncInfo> {
         match self
             .func_infos
-            .binary_search_by_key(&address, { |func_info| func_info.address })
+            .binary_search_by_key(&address, |func_info| func_info.address)
         {
             Ok(index) => Some(&self.func_infos[index]),
             Err(0) => None,
@@ -166,7 +168,7 @@ impl Fixer {
 
         // Build the `FileInfo` from the debug session.
         let mut interner = Interner::default();
-        let func_infos = debug_session
+        let mut func_infos: Vec<_> = debug_session
             .functions()
             .filter_map(|function| {
                 let function = function.ok()?;
@@ -202,6 +204,8 @@ impl Fixer {
                 })
             })
             .collect();
+        func_infos.sort_unstable_by_key(|func_info| func_info.address);
+        func_infos.dedup_by_key(|func_info| func_info.address);
 
         let file_info = FileInfo {
             func_infos,
