@@ -1,9 +1,9 @@
-// The source code for the `example` tests.
+// This file contains the source code for the `example` tests. Multiple files
+// are generated from this file. If you change this file at all you will
+// probably need to regenerate those files. (Even changing the number of lines
+// in this comment would have an effect.)
 //
-// `example-linux` was compiled on an Ubuntu 19.04 box using clang 8.0 with the
-// following command:
-//
-//   clang -g example.rs -o example-linux
+// See `tests/README.md` for more details.
 //
 
 #include <stdio.h>

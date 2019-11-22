@@ -10,7 +10,7 @@ use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
 use symbolic_common::Name;
-use symbolic_debuginfo::Object;
+use symbolic_debuginfo::{FileFormat, Object};
 use symbolic_demangle::{Demangle, DemangleFormat, DemangleOptions};
 
 #[cfg(test)]
@@ -158,21 +158,44 @@ impl Fixer {
     /// subsequently query. Return a description of the failing operation on
     /// error.
     fn build_file_info(file_name: &str) -> Result<FileInfo, String> {
-        // Get the debug session from file.
-        let msg = |op| format!("Unable to {} file {}", op, file_name);
-        let data = fs::read(file_name).map_err(|_| msg("read"))?;
+        let msg = |op: &str| format!("Unable to {} `{}`", op, file_name);
+
+        // Read the file.
+        let mut data = fs::read(file_name).map_err(|_| msg("read"))?;
+
+        // On some platforms we have to get the debug info from another file.
+        // Get the name of that file, if there is one.
+        let file_name2 = match Object::peek(&data) {
+            FileFormat::Pe => {
+                let pe_object = Object::parse(&data).map_err(|_| msg("parse"))?;
+                if let Object::Pe(pe) = pe_object {
+                    // PE files should contain a pointer to a PDB file.
+                    let pdb_file_name = pe.debug_file_name().ok_or_else(|| msg("find PDB for"))?;
+                    Some(pdb_file_name.to_string())
+                } else {
+                    panic!(); // Impossible: peek() said it was a PE object.
+                }
+            }
+            _ => None,
+        };
+        if let Some(file_name2) = file_name2 {
+            data = fs::read(&file_name2)
+                .map_err(|_| msg(&format!("read debug info file `{}` for", file_name2)))?;
+        }
+
+        // Get the debug session from the file data.
         let object = Object::parse(&data).map_err(|_| msg("parse"))?;
         let debug_session = object
             .debug_session()
             .map_err(|_| msg("read debug info from"))?;
 
-        // Build the `FileInfo` from the debug session.
+        // Build the `FileInfo` from the debug session. `tests/README.md` has an
+        // explanation of the commented-out `eprintln!` statements.
         let mut interner = Interner::default();
         let mut func_infos: Vec<_> = debug_session
             .functions()
             .filter_map(|function| {
                 let function = function.ok()?;
-                // This eprintln! is useful when creating tests.
                 //eprintln!(
                 //    "FUNC 0x{:x} size={} func={}",
                 //    function.address,
@@ -187,7 +210,6 @@ impl Fixer {
                         .lines
                         .into_iter()
                         .map(|line| {
-                            // This eprintln! is also useful when creating tests.
                             //eprintln!(
                             //    "LINE 0x{:x} line={} file={}",
                             //    line.address,

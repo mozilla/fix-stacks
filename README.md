@@ -6,22 +6,28 @@ name, line number. It relies on the `symbolic` crate to read debug info from
 files.
 
 It reads from standard input and writes to standard output. Lines matching the
-special stack frame format are modified appropriately. For example, this line:
+special stack frame format are modified appropriately. For example, a line
+like this in the input:
 ```
 #01: ???[tests/example +0x43a0]
 ```
-is changed to this in the output:
+is changed to something like this in the output:
 ```
-#01: example::main (/home/njn/moz/fix-stacks/tests/example.rs:22)
+#01: main (/home/njn/moz/fix-stacks/tests/example.c:24)
 ```
 Lines that do not match the special stack frame format are passed through
 unchanged.
 
+Because the stack frames produced by `MozFormatCodeAddress()` refer to build
+files (such as libxul), `fix-stacks` must run on the same machine that produced
+the stack frames and the build files. Furthermore, the build files must not
+have changed since the stack frames were produced. Otherwise, source locations
+in the output may be missing or incorrect.
+
 # Shortcomings
 
-`fix-stacks` is Linux-only. We aim to eventually support
-[Mac](https://github.com/mozilla/fix-stacks/issues/3),
-[Windows](https://github.com/mozilla/fix-stacks/issues/4), and possibly
-Android.
+`fix-stacks` works on Linux and Windows. We aim to eventually support
+[Mac](https://github.com/mozilla/fix-stacks/issues/3) and possibly Android.
 
-Use with debuginfo sections in separate files is untested and may not work.
+On Linux, use with debuginfo sections in separate files is untested and
+probably does not work.
