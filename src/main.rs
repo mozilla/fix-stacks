@@ -16,6 +16,10 @@ use symbolic_demangle::{Demangle, DemangleFormat, DemangleOptions};
 #[cfg(test)]
 mod tests;
 
+/// Should debugging output for functions and lines be printed? (See
+/// `tests/README.md` for more details.)
+const PRINT_FUNCS_AND_LINES: bool = false;
+
 /// An interned string type. Many file paths are repeated, so having this type
 /// reduces peak memory usage significantly.
 #[derive(Clone, Copy)]
@@ -111,19 +115,20 @@ struct FileInfo {
 
 impl FileInfo {
     fn new(debug_session: ObjectDebugSession) -> FileInfo {
-        // Build the `FileInfo` from the debug session. `tests/README.md` has an
-        // explanation of the commented-out `eprintln!` statements.
+        // Build the `FileInfo` from the debug session.
         let mut interner = Interner::default();
         let mut func_infos: Vec<_> = debug_session
             .functions()
             .filter_map(|function| {
                 let function = function.ok()?;
-                //eprintln!(
-                //    "FUNC 0x{:x} size={} func={}",
-                //    function.address,
-                //    function.size,
-                //    function.name.as_str()
-                //);
+                if PRINT_FUNCS_AND_LINES {
+                    eprintln!(
+                        "FUNC 0x{:x} size={} func={}",
+                        function.address,
+                        function.size,
+                        function.name.as_str()
+                    );
+                }
                 Some(FuncInfo {
                     address: function.address,
                     size: function.size,
@@ -132,12 +137,14 @@ impl FileInfo {
                         .lines
                         .into_iter()
                         .map(|line| {
-                            //eprintln!(
-                            //    "LINE 0x{:x} line={} file={}",
-                            //    line.address,
-                            //    line.line,
-                            //    line.file.path_str()
-                            //);
+                            if PRINT_FUNCS_AND_LINES {
+                                eprintln!(
+                                    "LINE 0x{:x} line={} file={}",
+                                    line.address,
+                                    line.line,
+                                    line.file.path_str()
+                                );
+                            }
                             LineInfo {
                                 address: line.address,
                                 line: line.line,
