@@ -10,7 +10,7 @@ use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
 use symbolic_common::Name;
-use symbolic_debuginfo::Object;
+use symbolic_debuginfo::{FileFormat, Object, ObjectDebugSession};
 use symbolic_demangle::{Demangle, DemangleFormat, DemangleOptions};
 
 #[cfg(test)]
@@ -71,6 +71,7 @@ struct FuncInfo {
     // duplicated.
     mangled_name: String,
 
+    // The `LineInfos` are sorted by `address`.
     line_infos: Box<[LineInfo]>,
 }
 
@@ -92,7 +93,7 @@ impl FuncInfo {
     fn line_info(&self, address: u64) -> Option<&LineInfo> {
         match self
             .line_infos
-            .binary_search_by_key(&address, |li| li.address)
+            .binary_search_by_key(&address, |line_info| line_info.address)
         {
             Ok(index) => Some(&self.line_infos[index]),
             Err(0) => None,
@@ -103,15 +104,63 @@ impl FuncInfo {
 
 /// Debug info for a single file.
 struct FileInfo {
-    func_infos: Box<[FuncInfo]>,
+    /// The `FuncInfo`s are sorted by `address`.
+    func_infos: Vec<FuncInfo>,
     interner: Interner,
 }
 
 impl FileInfo {
+    fn new(debug_session: ObjectDebugSession) -> FileInfo {
+        // Build the `FileInfo` from the debug session. `tests/README.md` has an
+        // explanation of the commented-out `eprintln!` statements.
+        let mut interner = Interner::default();
+        let mut func_infos: Vec<_> = debug_session
+            .functions()
+            .filter_map(|function| {
+                let function = function.ok()?;
+                //eprintln!(
+                //    "FUNC 0x{:x} size={} func={}",
+                //    function.address,
+                //    function.size,
+                //    function.name.as_str()
+                //);
+                Some(FuncInfo {
+                    address: function.address,
+                    size: function.size,
+                    mangled_name: function.name.as_str().to_string(),
+                    line_infos: function
+                        .lines
+                        .into_iter()
+                        .map(|line| {
+                            //eprintln!(
+                            //    "LINE 0x{:x} line={} file={}",
+                            //    line.address,
+                            //    line.line,
+                            //    line.file.path_str()
+                            //);
+                            LineInfo {
+                                address: line.address,
+                                line: line.line,
+                                path: interner.intern(line.file.path_str()),
+                            }
+                        })
+                        .collect(),
+                })
+            })
+            .collect();
+        func_infos.sort_unstable_by_key(|func_info| func_info.address);
+        func_infos.dedup_by_key(|func_info| func_info.address);
+
+        FileInfo {
+            func_infos,
+            interner,
+        }
+    }
+
     fn func_info(&self, address: u64) -> Option<&FuncInfo> {
         match self
             .func_infos
-            .binary_search_by_key(&address, { |func_info| func_info.address })
+            .binary_search_by_key(&address, |func_info| func_info.address)
         {
             Ok(index) => Some(&self.func_infos[index]),
             Err(0) => None,
@@ -156,59 +205,38 @@ impl Fixer {
     /// subsequently query. Return a description of the failing operation on
     /// error.
     fn build_file_info(file_name: &str) -> Result<FileInfo, String> {
-        // Get the debug session from file.
-        let msg = |op| format!("Unable to {} file {}", op, file_name);
-        let data = fs::read(file_name).map_err(|_| msg("read"))?;
+        let msg = |op: &str| format!("Unable to {} `{}`", op, file_name);
+
+        // Read the file.
+        let mut data = fs::read(file_name).map_err(|_| msg("read"))?;
+
+        // On some platforms we have to get the debug info from another file.
+        // Get the name of that file, if there is one.
+        let file_name2 = match Object::peek(&data) {
+            FileFormat::Pe => {
+                let pe_object = Object::parse(&data).map_err(|_| msg("parse"))?;
+                if let Object::Pe(pe) = pe_object {
+                    // PE files should contain a pointer to a PDB file.
+                    let pdb_file_name = pe.debug_file_name().ok_or_else(|| msg("find PDB for"))?;
+                    Some(pdb_file_name.to_string())
+                } else {
+                    panic!(); // Impossible: peek() said it was a PE object.
+                }
+            }
+            _ => None,
+        };
+        if let Some(file_name2) = file_name2 {
+            data = fs::read(&file_name2)
+                .map_err(|_| msg(&format!("read debug info file `{}` for", file_name2)))?;
+        }
+
+        // Get the debug session from the file data.
         let object = Object::parse(&data).map_err(|_| msg("parse"))?;
         let debug_session = object
             .debug_session()
             .map_err(|_| msg("read debug info from"))?;
 
-        // Build the `FileInfo` from the debug session.
-        let mut interner = Interner::default();
-        let func_infos = debug_session
-            .functions()
-            .filter_map(|function| {
-                let function = function.ok()?;
-                // This eprintln! is useful when creating tests.
-                //eprintln!(
-                //    "FUNC 0x{:x} size={} func={}",
-                //    function.address,
-                //    function.size,
-                //    function.name.as_str()
-                //);
-                Some(FuncInfo {
-                    address: function.address,
-                    size: function.size,
-                    mangled_name: function.name.as_str().to_string(),
-                    line_infos: function
-                        .lines
-                        .into_iter()
-                        .map(|line| {
-                            // This eprintln! is also useful when creating tests.
-                            //eprintln!(
-                            //    "LINE 0x{:x} line={} file={}",
-                            //    line.address,
-                            //    line.line,
-                            //    line.file.path_str()
-                            //);
-                            LineInfo {
-                                address: line.address,
-                                line: line.line,
-                                path: interner.intern(line.file.path_str()),
-                            }
-                        })
-                        .collect(),
-                })
-            })
-            .collect();
-
-        let file_info = FileInfo {
-            func_infos,
-            interner,
-        };
-
-        Ok(file_info)
+        Ok(FileInfo::new(debug_session))
     }
 
     /// Fix stack frames within `line` as necessary. Prints any errors to stderr.
