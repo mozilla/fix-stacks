@@ -10,11 +10,15 @@ use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
 use symbolic_common::Name;
-use symbolic_debuginfo::{FileFormat, Object, ObjectDebugSession};
+use symbolic_debuginfo::{FileFormat, Function, Object, ObjectDebugSession};
 use symbolic_demangle::{Demangle, DemangleFormat, DemangleOptions};
 
 #[cfg(test)]
 mod tests;
+
+/// Should debugging output for functions and lines be printed? (See
+/// `tests/README.md` for more details.)
+const PRINT_FUNCS_AND_LINES: bool = false;
 
 /// An interned string type. Many file paths are repeated, so having this type
 /// reduces peak memory usage significantly.
@@ -62,6 +66,24 @@ struct LineInfo {
     path: InternedString,
 }
 
+impl LineInfo {
+    fn new(interner: &mut Interner, line: symbolic_debuginfo::LineInfo) -> LineInfo {
+        if PRINT_FUNCS_AND_LINES {
+            eprintln!(
+                "LINE 0x{:x} line={} file={}",
+                line.address,
+                line.line,
+                line.file.path_str()
+            );
+        }
+        LineInfo {
+            address: line.address,
+            line: line.line,
+            path: interner.intern(line.file.path_str()),
+        }
+    }
+}
+
 /// Debug info for a single function.
 struct FuncInfo {
     address: u64,
@@ -76,6 +98,27 @@ struct FuncInfo {
 }
 
 impl FuncInfo {
+    fn new(interner: &mut Interner, function: Function) -> FuncInfo {
+        if PRINT_FUNCS_AND_LINES {
+            eprintln!(
+                "FUNC 0x{:x} size={} func={}",
+                function.address,
+                function.size,
+                function.name.as_str()
+            );
+        }
+        FuncInfo {
+            address: function.address,
+            size: function.size,
+            mangled_name: function.name.as_str().to_string(),
+            line_infos: function
+                .lines
+                .into_iter()
+                .map(|line| LineInfo::new(interner, line))
+                .collect(),
+        }
+    }
+
     fn demangled_name(&self) -> String {
         let options = DemangleOptions {
             format: DemangleFormat::Full,
@@ -111,41 +154,13 @@ struct FileInfo {
 
 impl FileInfo {
     fn new(debug_session: ObjectDebugSession) -> FileInfo {
-        // Build the `FileInfo` from the debug session. `tests/README.md` has an
-        // explanation of the commented-out `eprintln!` statements.
+        // Build the `FileInfo` from the debug session.
         let mut interner = Interner::default();
         let mut func_infos: Vec<_> = debug_session
             .functions()
             .filter_map(|function| {
                 let function = function.ok()?;
-                //eprintln!(
-                //    "FUNC 0x{:x} size={} func={}",
-                //    function.address,
-                //    function.size,
-                //    function.name.as_str()
-                //);
-                Some(FuncInfo {
-                    address: function.address,
-                    size: function.size,
-                    mangled_name: function.name.as_str().to_string(),
-                    line_infos: function
-                        .lines
-                        .into_iter()
-                        .map(|line| {
-                            //eprintln!(
-                            //    "LINE 0x{:x} line={} file={}",
-                            //    line.address,
-                            //    line.line,
-                            //    line.file.path_str()
-                            //);
-                            LineInfo {
-                                address: line.address,
-                                line: line.line,
-                                path: interner.intern(line.file.path_str()),
-                            }
-                        })
-                        .collect(),
-                })
+                Some(FuncInfo::new(&mut interner, function))
             })
             .collect();
         func_infos.sort_unstable_by_key(|func_info| func_info.address);

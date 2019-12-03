@@ -39,8 +39,8 @@ The primary source code file used for generating these files is
 ## Obtaining the debug info
 
 The unit tests refer to specific addresses within the generated binaries. These
-addresses were determined for each generated executable by uncommenting the
-`eprintln!` statements in `FileInfo::new` and running `fix-stacks` on an input
+addresses were determined for each generated executable by changing the
+`PRINT_FUNCS_AND_LINES` constant to `true` and running `fix-stacks` on an input
 that mentions that executable. For example, the debug info for `example-linux`
 was obtained using an input file containing this line:
 ```
