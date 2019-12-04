@@ -221,36 +221,37 @@ impl Fixer {
     /// subsequently query. Return a description of the failing operation on
     /// error.
     fn build_file_info(file_name: &str) -> Result<FileInfo, String> {
-        // Read the file.
-        let mut data = fs::read(file_name).map_err(|_| "read")?;
-
-        // On some platforms we have to get the debug info from another file.
-        // Get the name of that file, if there is one.
-        let file_name2 = match Object::peek(&data) {
-            FileFormat::Pe => {
-                let pe_object = Object::parse(&data).map_err(|_| "parse")?;
-                if let Object::Pe(pe) = pe_object {
-                    // PE files should contain a pointer to a PDB file.
-                    let pdb_file_name = pe.debug_file_name().ok_or_else(|| "find PDB for")?;
-                    Some(pdb_file_name.to_string())
-                } else {
-                    panic!(); // Impossible: peek() said it was a PE object.
-                }
-            }
-            _ => None,
-        };
-        if let Some(file_name2) = file_name2 {
-            data = fs::read(&file_name2)
-                .map_err(|_| format!("read debug info file `{}` for", file_name2))?;
+        let data = fs::read(file_name).map_err(|_| "read")?;
+        let file_format = Object::peek(&data);
+        match file_format {
+            FileFormat::Elf => Fixer::build_file_info_direct(&data),
+            FileFormat::Pe => Fixer::build_file_info_pe(&data),
+            FileFormat::Pdb => Fixer::build_file_info_direct(&data),
+            _ => Err(format!("parse {} format file", file_format)),
         }
+    }
 
-        // Get the debug session from the file data.
+    // "Direct" means that the debug info is within `data`, as opposed to being
+    // in another file that `data` refers to.
+    fn build_file_info_direct(data: &[u8]) -> Result<FileInfo, String> {
         let object = Object::parse(&data).map_err(|_| "parse")?;
-        let debug_session = object
-            .debug_session()
-            .map_err(|_| "read debug info from")?;
-
+        let debug_session = object.debug_session().map_err(|_| "read debug info from")?;
         Ok(FileInfo::new(debug_session))
+    }
+
+    fn build_file_info_pe(data: &[u8]) -> Result<FileInfo, String> {
+        // For PEs we get the debug info from a PDB file.
+        let pe_object = Object::parse(&data).map_err(|_| "parse")?;
+        let pe = match pe_object {
+            Object::Pe(pe) => pe,
+            _ => unreachable!(),
+        };
+        let pdb_file_name = pe
+            .debug_file_name()
+            .ok_or_else(|| "find debug info file for")?;
+        let data = fs::read(pdb_file_name.to_string())
+            .map_err(|_| format!("read debug info file `{}` for", pdb_file_name))?;
+        Fixer::build_file_info_direct(&data)
     }
 
     /// Fix stack frames within `line` as necessary. Prints any errors to stderr.
