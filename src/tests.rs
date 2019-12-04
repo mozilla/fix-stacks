@@ -176,8 +176,8 @@ fn test_regex() {
 
     // An error message is also printed to stderr for file errors, but we don't
     // test for that.
-    unchanged("#00: ???[tests/no-such-file +0x43a0]"); // No such file.
-    unchanged("#00: ???[src/main.rs +0x43a0]"); // File exists, but has wrong format.
+    unchanged("#00: ??? (tests/no-such-file)"); // No such file.
+    unchanged("#00: ??? (src/main.rs)"); // File exists, but has wrong format.
 
     // Test various different changed line forms that do match the regex.
     let mut changed = |line1: &str, line2_expected| {

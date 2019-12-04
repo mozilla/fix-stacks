@@ -146,6 +146,7 @@ impl FuncInfo {
 }
 
 /// Debug info for a single file.
+#[derive(Default)]
 struct FileInfo {
     /// The `FuncInfo`s are sorted by `address`.
     func_infos: Vec<FuncInfo>,
@@ -275,8 +276,15 @@ impl Fixer {
             Entry::Vacant(v) => match Fixer::build_file_info(file_name) {
                 Ok(file_info) => v.insert(file_info),
                 Err(op) => {
+                    // Print an error message and then set up an empty
+                    // `FileInfo` for this file, for two reasons.
+                    // - If an invalid file is mentioned multiple times in the
+                    //   input, an error message will be issued only on the
+                    //   first occurrence.
+                    // - The line will still receive some transformation, using
+                    //   the "no symbols or debug info" case below.
                     eprintln!("fix-stacks error: failed to {} `{}`", op, file_name);
-                    return line;
+                    v.insert(FileInfo::default())
                 }
             },
         };
