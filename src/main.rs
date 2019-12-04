@@ -220,19 +220,17 @@ impl Fixer {
     /// subsequently query. Return a description of the failing operation on
     /// error.
     fn build_file_info(file_name: &str) -> Result<FileInfo, String> {
-        let msg = |op: &str| format!("Unable to {} `{}`", op, file_name);
-
         // Read the file.
-        let mut data = fs::read(file_name).map_err(|_| msg("read"))?;
+        let mut data = fs::read(file_name).map_err(|_| "read")?;
 
         // On some platforms we have to get the debug info from another file.
         // Get the name of that file, if there is one.
         let file_name2 = match Object::peek(&data) {
             FileFormat::Pe => {
-                let pe_object = Object::parse(&data).map_err(|_| msg("parse"))?;
+                let pe_object = Object::parse(&data).map_err(|_| "parse")?;
                 if let Object::Pe(pe) = pe_object {
                     // PE files should contain a pointer to a PDB file.
-                    let pdb_file_name = pe.debug_file_name().ok_or_else(|| msg("find PDB for"))?;
+                    let pdb_file_name = pe.debug_file_name().ok_or_else(|| "find PDB for")?;
                     Some(pdb_file_name.to_string())
                 } else {
                     panic!(); // Impossible: peek() said it was a PE object.
@@ -242,14 +240,14 @@ impl Fixer {
         };
         if let Some(file_name2) = file_name2 {
             data = fs::read(&file_name2)
-                .map_err(|_| msg(&format!("read debug info file `{}` for", file_name2)))?;
+                .map_err(|_| format!("read debug info file `{}` for", file_name2))?;
         }
 
         // Get the debug session from the file data.
-        let object = Object::parse(&data).map_err(|_| msg("parse"))?;
+        let object = Object::parse(&data).map_err(|_| "parse")?;
         let debug_session = object
             .debug_session()
-            .map_err(|_| msg("read debug info from"))?;
+            .map_err(|_| "read debug info from")?;
 
         Ok(FileInfo::new(debug_session))
     }
@@ -276,8 +274,8 @@ impl Fixer {
             Entry::Occupied(o) => o.into_mut(),
             Entry::Vacant(v) => match Fixer::build_file_info(file_name) {
                 Ok(file_info) => v.insert(file_info),
-                Err(msg) => {
-                    eprintln!("{}", msg);
+                Err(op) => {
+                    eprintln!("fix-stacks error: failed to {} `{}`", op, file_name);
                     return line;
                 }
             },
