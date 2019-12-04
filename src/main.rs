@@ -148,9 +148,10 @@ impl FuncInfo {
 /// Debug info for a single file.
 #[derive(Default)]
 struct FileInfo {
+    interner: Interner,
+
     /// The `FuncInfo`s are sorted by `address`.
     func_infos: Vec<FuncInfo>,
-    interner: Interner,
 }
 
 impl FileInfo {
@@ -168,8 +169,8 @@ impl FileInfo {
         func_infos.dedup_by_key(|func_info| func_info.address);
 
         FileInfo {
-            func_infos,
             interner,
+            func_infos,
         }
     }
 
