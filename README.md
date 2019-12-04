@@ -2,8 +2,8 @@
 
 This program post-processes ("fixes") the stack frames produced by
 `MozFormatCodeAddress()`, which often lack one or more of: function name, file
-name, line number. It relies on the `symbolic` crate to read debug info from
-files.
+name, line number. It relies on the `symbolic` and `goblin` crates to read
+debug info from files.
 
 It reads from standard input and writes to standard output. Lines matching the
 special stack frame format are modified appropriately. For example, a line
@@ -24,10 +24,9 @@ the stack frames and the build files. Furthermore, the build files must not
 have changed since the stack frames were produced. Otherwise, source locations
 in the output may be missing or incorrect.
 
-# Shortcomings
+`fix-stacks` works on Linux, Windows, and Mac.
 
-`fix-stacks` works on Linux and Windows. We aim to eventually support
-[Mac](https://github.com/mozilla/fix-stacks/issues/3) and possibly Android.
+# Shortcomings
 
 On Linux, use with debuginfo sections in separate files is untested and
 probably does not work.
