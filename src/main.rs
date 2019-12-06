@@ -475,7 +475,7 @@ impl Fixer {
     /// `bar.o` is within the archive `libfoo.a`. If so, return the archive
     /// name.
     fn is_within_archive(file_name: &str) -> Option<&str> {
-        if let (Some(index), true) = (file_name.find(".a("), file_name.ends_with(")")) {
+        if let (Some(index), true) = (file_name.find(".a("), file_name.ends_with(')')) {
             let ar_file_name = &file_name[..index + 2];
             Some(ar_file_name)
         } else {
