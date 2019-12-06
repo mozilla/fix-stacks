@@ -33,7 +33,7 @@ fn test_linux() {
 
     let mut fixer = Fixer::new(JsonEscaping::No);
 
-    // Test various addresses within `main`.
+    // Test various addresses.
     let mut func = |name, addr, linenum| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
         let line = fixer.fix(line);
@@ -111,8 +111,8 @@ fn test_windows() {
 
     let mut fixer = Fixer::new(JsonEscaping::Yes);
 
-    // Test various addresses within `main` using `example-windows`, which
-    // redirects to `example-windows.pdb`.
+    // Test various addresses using `example-windows`, which redirects to
+    // `example-windows.pdb`.
     let mut func = |name, addr, linenum| {
         let line = format!("#00: ???[tests/example-windows +0x{:x}]", addr);
         let line = fixer.fix(line);
@@ -159,6 +159,109 @@ fn test_windows() {
 }
 
 #[test]
+fn test_mac() {
+    // The debug info within `mac-multi` is as follows. (See `tests/README.md`
+    // for details on how these lines were generated.)
+    //
+    //   FUNC 0xd70 size=54 func=main
+    //   LINE 0xd70 line=17 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //   LINE 0xd7f line=18 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //   LINE 0xd86 line=19 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //   LINE 0xd8f line=20 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //   LINE 0xd98 line=21 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //   LINE 0xd9d line=22 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //
+    //   FUNC 0xdb0 size=31 func=duplicate
+    //   LINE 0xdb0 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //   LINE 0xdb8 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //   LINE 0xdc9 line=12 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
+    //
+    //   FUNC 0xdd0 size=37 func=fat_B
+    //   LINE 0xdd0 line=19 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //   LINE 0xddc line=20 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //   LINE 0xdef line=21 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //
+    //   FUNC 0xe00 size=34 func=fat_A
+    //   LINE 0xe00 line=13 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //   LINE 0xe0b line=14 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //   LINE 0xe14 line=15 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //   LINE 0xe19 line=16 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //
+    //   FUNC 0xe30 size=31 func=duplicate
+    //   LINE 0xe30 line=9 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //   LINE 0xe38 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //   LINE 0xe49 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-fat.c
+    //
+    //   FUNC 0xe50 size=37 func=lib1_B
+    //   LINE 0xe50 line=19 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xe5c line=20 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xe6f line=21 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //
+    //   FUNC 0xe80 size=34 func=lib1_A
+    //   LINE 0xe80 line=13 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xe8b line=14 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xe94 line=15 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xe99 line=16 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //
+    //   // Note that these ones are wrong, and should start at 0xeb0. This is
+    //   // due to the unavoidable archive suffix stripping, see comments in
+    //   // `main.rs` for details.
+    //   FUNC 0xf30 size=31 func=duplicate
+    //   LINE 0xf30 line=9 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xf38 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xf49 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //
+    //   FUNC 0xed0 size=37 func=lib2_B
+    //   LINE 0xed0 line=19 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //   LINE 0xedc line=20 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //   LINE 0xeef line=21 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //
+    //   FUNC 0xf00 size=39 func=lib2_A
+    //   LINE 0xf00 line=13 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //   LINE 0xf0b line=14 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //   LINE 0xf19 line=15 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //   LINE 0xf1e line=16 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //
+    //   FUNC 0xf30 size=31 func=duplicate
+    //   LINE 0xf30 line=9 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //   LINE 0xf38 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+    //   LINE 0xf49 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
+
+    let mut fixer = Fixer::new(JsonEscaping::No);
+
+    // Test addresses from all the object files that `mac-multi` references.
+    let mut func = |name, addr, full_path, locn| {
+        let line = format!("#00: ???[tests/mac-multi +0x{:x}]", addr);
+        let line = fixer.fix(line);
+        let path = if full_path {
+            "/Users/njn/moz/fix-stacks/tests/"
+        } else {
+            "tests/"
+        };
+        assert_eq!(line, format!("#00: {} ({}{})", name, path, locn));
+    };
+
+    func("main", 0xd70, true, "mac-normal.c:17");
+    func("duplicate", 0xdb3, true, "mac-normal.c:10");
+
+    func("fat_B", 0xddc, true, "mac-fat.c:20");
+    func("fat_A", 0xe19, true, "mac-fat.c:16");
+    func("duplicate", 0xe4e, true, "mac-fat.c:11");
+
+    func("lib1_B", 0xe50, true, "mac-lib1.c:19");
+    func("lib1_A", 0xe95, true, "mac-lib1.c:15");
+    // This should be `duplicate` in `mac-lib1.c`. It's wrong due to the
+    // archive suffix stripping mentioned above.
+    func("???", 0xeaa, false, "mac-multi");
+
+    func("lib2_B", 0xedc, true, "mac-lib2.c:20");
+    func("lib2_A", 0xf1e, true, "mac-lib2.c:16");
+    // This should be `mac-lib2.c:10`. It's wrong due to the archive suffix
+    // stripping mentioned above.
+    func("duplicate", 0xf38, true, "mac-lib1.c:10");
+}
+
+#[test]
 fn test_regex() {
     let mut fixer = Fixer::new(JsonEscaping::No);
 
@@ -176,8 +279,8 @@ fn test_regex() {
 
     // An error message is also printed to stderr for file errors, but we don't
     // test for that.
-    unchanged("#00: ???[tests/no-such-file +0x43a0]"); // No such file.
-    unchanged("#00: ???[src/main.rs +0x43a0]"); // File exists, but has wrong format.
+    unchanged("#00: ??? (tests/no-such-file)"); // No such file.
+    unchanged("#00: ??? (src/main.rs)"); // File exists, but has wrong format.
 
     // Test various different changed line forms that do match the regex.
     let mut changed = |line1: &str, line2_expected| {

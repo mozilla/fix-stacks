@@ -22,19 +22,56 @@ To allow this requires the following.
 ## Generating inputs
 
 Debug info is very complicated and hard to write by hand. Therefore, the tests
-use executables and other data files created by compilers as inputs.
+use executables and other data files created by compilers as inputs. These were
+all generated within the `test` directory in the following ways.
 
-The primary source code file used for generating these files is
-`tests/example.c`. The following files were generated from it.
-- `example-linux`: produced on an Ubuntu 19.04 box by clang 8.0 with the
-  command `clang -g example.c -o example-linux`.
-- `example-windows` and `example-windows.pdb`: produced on a Windows 10 laptop
-  by clang 9.0 with the command `clang -g example.c -o example-windows`.
-  `example-windows` was then hex-edited to change the PDB reference from the
-  absolute path `c:\Users\njn\moz\fix-stacks\tests\example-windows.pdb` to the
-  relative path `tests/////////////////////////////example-windows.pdb`. (The
-  use of many redundant forward slashes is a hack to keep the path the same
-  length, which avoids the need for more complex changes to that file.)
+### Linux
+
+`example-linux` was produced on an Ubuntu 19.04 box by clang 8.0 with this
+command:
+```
+clang -g example.c -o example-linux
+```
+
+### Windows
+
+`example-windows` and `example-windows.pdb` were produced on a Windows 10 laptop
+ by clang 9.0 with this command:
+```
+clang -g example.c -o example-windows
+```
+`example-windows` was then hex-edited to change the PDB reference from the
+absolute path `c:\Users\njn\moz\fix-stacks\tests\example-windows.pdb` to the
+relative path `tests/////////////////////////////example-windows.pdb`. (The use
+of many redundant forward slashes is a hack to keep the path the same length,
+which avoids the need for more complex changes to that file.)
+
+### Mac
+
+The Mac tests are more complex because `fix-stacks`'s code for handling Mach-O
+binaries is more complex than other formats.
+
+`mac-multi` was produced on a MacBook Pro running macOS 10.14 by Apple clang
+11.0 with these commands:
+```
+# A normal file.
+clang -c -g mac-normal.c -o mac-normal.o
+# A fat binary.
+clang -m32 -c -g mac-fat.c -o mac-fat-32.o
+clang -m64 -c -g mac-fat.c -o mac-fat-64.o
+lipo -create mac-fat-32.o mac-fat-64.o -output mac-fat.o
+# A library.
+clang -c -g mac-lib1.c -o mac-lib1.o
+clang -c -g mac-lib2.c -o mac-lib2.o
+ar -r libexample.a mac-lib1.o mac-lib2.o
+# The final executable.
+clang mac-normal.o mac-fat.o libexample.a -o mac-multi
+```
+`mac-multi` was then hex-edited to change all the file reference from the
+absolute paths such as `/Users/njn/moz/fix-stacks/tests/mac-normal.c` to the
+relative paths such as `tests///////////////////////////mac-normal.c`. (The use
+of many redundant forward slashes is a hack to keep the path the same length,
+which avoids the need for more complex changes to that file.)
 
 ## Obtaining the debug info
 
