@@ -578,14 +578,19 @@ impl Fixer {
                 )
             } else {
                 // We have the filename from the debug info, but no line number.
-                format!("{} ({})", func_info.demangled_name(), file_name)
+                format!(
+                    "{} ({} +0x{:x})",
+                    func_info.demangled_name(),
+                    file_name,
+                    address
+                )
             }
         } else {
             // We have nothing from the symbols or debug info. Use the file name
             // from original input, which is probably "???". The end result is the
             // same as the original line, but with the address removed and slightly
             // different formatting.
-            format!("{} ({})", func_name, file_name)
+            format!("{} ({} +0x{:x})", func_name, file_name, address)
         };
 
         if let JsonEscaping::Yes = self.json_escaping {

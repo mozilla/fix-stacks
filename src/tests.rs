@@ -67,8 +67,9 @@ fn test_linux() {
     // Test various addresses outside `main`, `f`, and `g`.
     let mut outside = |addr| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
-        let line = fixer.fix(line);
-        assert_eq!(format!("#00: ??? (tests/example-linux)"), line);
+        let line_actual = fixer.fix(line);
+        let line_expected = format!("#00: ??? (tests/example-linux +0x{:x})", addr);
+        assert_eq!(line_expected, line_actual);
     };
     outside(0x0); // A very low address.
     outside(0x999); // Well before the start of main.
@@ -148,8 +149,9 @@ fn test_windows() {
     // `example-windows.pdb` directly.
     let mut outside = |addr| {
         let line = format!("#00: foobar[tests/example-windows.pdb +0x{:x}]", addr);
-        let line = fixer.fix(line);
-        assert_eq!(format!("#00: foobar (tests/example-windows.pdb)"), line);
+        let line_actual = fixer.fix(line);
+        let line_expected = format!("#00: foobar (tests/example-windows.pdb +0x{:x})", addr);
+        assert_eq!(line_expected, line_actual);
     };
     outside(0x0); // A very low address.
     outside(0x999); // Well before the start of main.
@@ -232,13 +234,14 @@ fn test_mac() {
     // Test addresses from all the object files that `mac-multi` references.
     let mut func = |name, addr, full_path, locn| {
         let line = format!("#00: ???[tests/mac-multi +0x{:x}]", addr);
-        let line = fixer.fix(line);
+        let line_actual = fixer.fix(line);
         let path = if full_path {
             "/Users/njn/moz/fix-stacks/tests/"
         } else {
             "tests/"
         };
-        assert_eq!(line, format!("#00: {} ({}{})", name, path, locn));
+        let line_expected = format!("#00: {} ({}{})", name, path, locn);
+        assert_eq!(line_expected, line_actual);
     };
 
     func("main", 0xd70, true, "mac-normal.c:17");
@@ -252,7 +255,7 @@ fn test_mac() {
     func("lib1_A", 0xe95, true, "mac-lib1.c:15");
     // This should be `duplicate` in `mac-lib1.c`. It's wrong due to the
     // archive suffix stripping mentioned above.
-    func("???", 0xeaa, false, "mac-multi");
+    func("???", 0xeaa, false, "mac-multi +0xeaa");
 
     func("lib2_B", 0xedc, true, "mac-lib2.c:20");
     func("lib2_A", 0xf1e, true, "mac-lib2.c:16");
