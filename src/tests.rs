@@ -31,7 +31,7 @@ fn test_linux() {
     //   LINE 0x11cd line=13 file=/home/njn/moz/fix-stacks/tests/example.c
     //   LINE 0x11db line=14 file=/home/njn/moz/fix-stacks/tests/example.c
 
-    let mut fixer = Fixer::new(JsonEscaping::No);
+    let mut fixer = Fixer::new(JsonMode::No);
 
     // Test various addresses.
     let mut func = |name, addr, linenum| {
@@ -62,7 +62,7 @@ fn test_linux() {
     func("g", 0x11de, 14);
 
     // Try a new Fixer.
-    fixer = Fixer::new(JsonEscaping::No);
+    fixer = Fixer::new(JsonMode::No);
 
     // Test various addresses outside `main`, `f`, and `g`.
     let mut outside = |addr| {
@@ -110,7 +110,7 @@ fn test_windows() {
     // outputs contains backwards slashes, though, because that is what is used
     // within the debug info.
 
-    let mut fixer = Fixer::new(JsonEscaping::Yes);
+    let mut fixer = Fixer::new(JsonMode::Yes);
 
     // Test various addresses using `example-windows`, which redirects to
     // `example-windows.pdb`.
@@ -142,8 +142,8 @@ fn test_windows() {
     func("g", 0x6c49, 12);
     func("g", 0x6c63, 14);
 
-    // Try a new Fixer, without JSON escaping.
-    fixer = Fixer::new(JsonEscaping::No);
+    // Try a new Fixer, without JSON mode.
+    fixer = Fixer::new(JsonMode::No);
 
     // Test various addresses outside `main`, `f`, and `g`, using
     // `example-windows.pdb` directly.
@@ -229,7 +229,7 @@ fn test_mac() {
     //   LINE 0xf38 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
     //   LINE 0xf49 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
 
-    let mut fixer = Fixer::new(JsonEscaping::No);
+    let mut fixer = Fixer::new(JsonMode::No);
 
     // Test addresses from all the object files that `mac-multi` references.
     let mut func = |name, addr, full_path, locn| {
@@ -266,7 +266,7 @@ fn test_mac() {
 
 #[test]
 fn test_regex() {
-    let mut fixer = Fixer::new(JsonEscaping::No);
+    let mut fixer = Fixer::new(JsonMode::No);
 
     // Test various different unchanged line forms, that don't match the regex.
     let mut unchanged = |line: &str| {
@@ -301,7 +301,7 @@ fn test_regex() {
 
 #[test]
 fn test_files() {
-    let mut fixer = Fixer::new(JsonEscaping::Yes);
+    let mut fixer = Fixer::new(JsonMode::Yes);
 
     // Test various different file errors. An error message is also printed to
     // stderr for each one, but we don't test for that.
