@@ -542,16 +542,16 @@ impl Fixer {
         };
 
         let before = &captures[1];
-        let func_name = &captures[2];
-        let file_name = &captures[3];
+        let in_func_name = &captures[2];
+        let in_file_name = &captures[3];
         let address = u64::from_str_radix(&captures[4], 16).unwrap();
         let after = &captures[5];
 
         // If we haven't seen this file yet, parse and record its contents, for
         // this lookup and any future lookups.
-        let file_info = match self.file_infos.entry(file_name.to_string()) {
+        let file_info = match self.file_infos.entry(in_file_name.to_string()) {
             Entry::Occupied(o) => o.into_mut(),
-            Entry::Vacant(v) => match Fixer::build_file_info(file_name) {
+            Entry::Vacant(v) => match Fixer::build_file_info(in_file_name) {
                 Ok(file_info) => v.insert(file_info),
                 Err(op) => {
                     // Print an error message and then set up an empty
@@ -561,42 +561,57 @@ impl Fixer {
                     //   first occurrence.
                     // - The line will still receive some transformation, using
                     //   the "no symbols or debug info" case below.
-                    eprintln!("fix-stacks error: failed to {} `{}`", op, file_name);
+                    eprintln!("fix-stacks error: failed to {} `{}`", op, in_file_name);
                     v.insert(FileInfo::default())
                 }
             },
         };
 
-        let mut func_name_and_locn = if let Some(func_info) = file_info.func_info(address) {
+        // If JSON escaping is enabled, we need to escape any new strings we
+        // produce. However, strings that came in from the text (i.e.
+        // `in_func_name` and `in_file_name`), will already be escaped, so if
+        // they become part of the output they shouldn't be escaped.
+        if let Some(func_info) = file_info.func_info(address) {
+            let raw_func_name = func_info.demangled_name();
+            let out_func_name = if let JsonEscaping::Yes = self.json_escaping {
+                Fixer::json_escape(&raw_func_name)
+            } else {
+                raw_func_name
+            };
+
             if let Some(line_info) = func_info.line_info(address) {
-                // We have the filename and line number from the debug info.
+                // We have the function name, filename, and line number from
+                // the debug info.
+                let raw_file_name = file_info.interner.get(line_info.path);
+                let out_file_name = if let JsonEscaping::Yes = self.json_escaping {
+                    Fixer::json_escape(&raw_file_name)
+                } else {
+                    raw_file_name.to_string()
+                };
+
                 format!(
-                    "{} ({}:{})",
-                    func_info.demangled_name(),
-                    file_info.interner.get(line_info.path),
-                    line_info.line
+                    "{}{} ({}:{}){}",
+                    before, out_func_name, out_file_name, line_info.line, after
                 )
             } else {
-                // We have the filename from the debug info, but no line number.
+                // We have the function name from the debug info, but no file
+                // name or line number. Use the file name and address from the
+                // original input.
                 format!(
-                    "{} ({} +0x{:x})",
-                    func_info.demangled_name(),
-                    file_name,
-                    address
+                    "{}{} ({} +0x{:x}){}",
+                    before, out_func_name, in_file_name, address, after
                 )
             }
         } else {
-            // We have nothing from the symbols or debug info. Use the file name
-            // from original input, which is probably "???". The end result is the
-            // same as the original line, but with the address removed and slightly
-            // different formatting.
-            format!("{} ({} +0x{:x})", func_name, file_name, address)
-        };
-
-        if let JsonEscaping::Yes = self.json_escaping {
-            func_name_and_locn = Fixer::json_escape(&func_name_and_locn);
+            // We have nothing from the debug info. Use the function name, file
+            // name, and address from the original input. The end result is the
+            // same as the original line, but with slightly different
+            // formatting.
+            format!(
+                "{}{} ({} +0x{:x}{})",
+                before, in_func_name, in_file_name, address, after
+            )
         }
-        format!("{}{}{}", before, func_name_and_locn, after)
     }
 }
 
