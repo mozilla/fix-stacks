@@ -608,7 +608,7 @@ impl Fixer {
             // same as the original line, but with slightly different
             // formatting.
             format!(
-                "{}{} ({} +0x{:x}{})",
+                "{}{} ({} +0x{:x}){}",
                 before, in_func_name, in_file_name, address, after
             )
         }
