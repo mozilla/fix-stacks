@@ -53,7 +53,7 @@ impl Interner {
     }
 }
 
-enum JsonEscaping {
+enum JsonMode {
     No,
     Yes,
 }
@@ -252,19 +252,19 @@ impl FileInfo {
 struct Fixer {
     re: Regex,
     file_infos: FxHashMap<String, FileInfo>,
-    json_escaping: JsonEscaping,
+    json_mode: JsonMode,
 }
 
 /// Records address of functions from a symbol table.
 type SymFuncAddrs = FxHashMap<String, u64>;
 
 impl Fixer {
-    fn new(json_escaping: JsonEscaping) -> Fixer {
+    fn new(json_mode: JsonMode) -> Fixer {
         Fixer {
             // Matches lines produced by MozFormatCodeAddress().
             re: Regex::new(r"^(.*#\d+: )(.+)\[(.+) \+0x([0-9A-Fa-f]+)\](.*)$").unwrap(),
             file_infos: FxHashMap::default(),
-            json_escaping,
+            json_mode,
         }
     }
 
@@ -567,13 +567,13 @@ impl Fixer {
             },
         };
 
-        // If JSON escaping is enabled, we need to escape any new strings we
+        // If JSON mode is enabled, we need to escape any new strings we
         // produce. However, strings that came in from the text (i.e.
         // `in_func_name` and `in_file_name`), will already be escaped, so if
-        // they become part of the output they shouldn't be escaped.
+        // they become part of the output they shouldn't be re-escaped.
         if let Some(func_info) = file_info.func_info(address) {
             let raw_func_name = func_info.demangled_name();
-            let out_func_name = if let JsonEscaping::Yes = self.json_escaping {
+            let out_func_name = if let JsonMode::Yes = self.json_mode {
                 Fixer::json_escape(&raw_func_name)
             } else {
                 raw_func_name
@@ -583,7 +583,7 @@ impl Fixer {
                 // We have the function name, filename, and line number from
                 // the debug info.
                 let raw_file_name = file_info.interner.get(line_info.path);
-                let out_file_name = if let JsonEscaping::Yes = self.json_escaping {
+                let out_file_name = if let JsonMode::Yes = self.json_mode {
                     Fixer::json_escape(&raw_file_name)
                 } else {
                     raw_file_name.to_string()
@@ -622,19 +622,19 @@ r##"usage: fix-stacks [options] < input > output
 Post-process the stack frames produced by MozFormatCodeAddress().
 
 options:
-  -h, --help      show this message and exit
-  -j, --json      Use JSON escaping for printed function names and file names
+  -h, --help      Show this message and exit
+  -j, --json      Treat input and output as JSON fragments
 "##;
 
 fn main_inner() -> io::Result<()> {
     // Process command line arguments.
-    let mut json_escaping = JsonEscaping::No;
+    let mut json_mode = JsonMode::No;
     for arg in env::args().skip(1) {
         if arg == "-h" || arg == "--help" {
             println!("{}", USAGE_MSG);
             return Ok(());
         } else if arg == "-j" || arg == "--json" {
-            json_escaping = JsonEscaping::Yes;
+            json_mode = JsonMode::Yes;
         } else {
             let msg = format!(
                 "bad argument `{}`. Run `fix-stacks -h` for more information.",
@@ -646,7 +646,7 @@ fn main_inner() -> io::Result<()> {
 
     let reader = io::BufReader::new(io::stdin());
 
-    let mut fixer = Fixer::new(json_escaping);
+    let mut fixer = Fixer::new(json_mode);
     for line in reader.lines() {
         writeln!(io::stdout(), "{}", fixer.fix(line.unwrap()))?;
     }
