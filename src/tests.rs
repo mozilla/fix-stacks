@@ -315,10 +315,9 @@ fn test_files() {
         "#00: ??? (tests/no-such-file +0x0)",
     );
     // No such file, with backslashes (which tests JSON escaping).
-    // XXX: the output is currently incorrect, and will be fixed shortly.
     file_error(
         "#00: ???[tests\\no-such-dir\\\\no-such-file +0x0]",
-        "#00: ??? (tests\\\\no-such-dir\\\\\\\\no-such-file +0x0)",
+        "#00: ??? (tests\\no-such-dir\\\\no-such-file +0x0)",
     );
     // File exists, but has the wrong format.
     file_error(
