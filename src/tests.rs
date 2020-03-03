@@ -280,11 +280,6 @@ fn test_regex() {
     unchanged("#00: ???[tests/example-linux +1130]"); // Missing the '0x`.
     unchanged("#00: ???(tests/example-linux +0x1130)"); // Wrong parentheses.
 
-    // An error message is also printed to stderr for file errors, but we don't
-    // test for that.
-    unchanged("#00: ??? (tests/no-such-file)"); // No such file.
-    unchanged("#00: ??? (src/main.rs)"); // File exists, but has wrong format.
-
     // Test various different changed line forms that do match the regex.
     let mut changed = |line1: &str, line2_expected| {
         let line2_actual = fixer.fix(line1.to_string());
@@ -301,5 +296,33 @@ fn test_regex() {
     changed(
         "#01: ???[tests/../src/../tests/example-linux +0x1130]",
         "#01: main (/home/njn/moz/fix-stacks/tests/example.c:24)",
+    );
+}
+
+#[test]
+fn test_files() {
+    let mut fixer = Fixer::new(JsonEscaping::Yes);
+
+    // Test various different file errors. An error message is also printed to
+    // stderr for each one, but we don't test for that.
+    let mut file_error = |line1: &str, line2_expected| {
+        let line2_actual = fixer.fix(line1.to_string());
+        assert_eq!(line2_expected, line2_actual);
+    };
+    // No such file.
+    file_error(
+        "#00: ???[tests/no-such-file +0x0]",
+        "#00: ??? (tests/no-such-file +0x0)",
+    );
+    // No such file, with backslashes (which tests JSON escaping).
+    // XXX: the output is currently incorrect, and will be fixed shortly.
+    file_error(
+        "#00: ???[tests\\no-such-dir\\\\no-such-file +0x0]",
+        "#00: ??? (tests\\\\no-such-dir\\\\\\\\no-such-file +0x0)",
+    );
+    // File exists, but has the wrong format.
+    file_error(
+        "#00: ???[src/main.rs +0x0]",
+        "#00: ??? (src/main.rs +0x0)",
     );
 }
