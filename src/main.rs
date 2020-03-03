@@ -268,12 +268,27 @@ impl Fixer {
         }
     }
 
+    /// Add JSON escapes to a fragment of text.
     fn json_escape(string: &str) -> String {
         // Do the escaping.
         let escaped = serde_json::to_string(string).unwrap();
 
         // Strip the quotes.
         escaped[1..escaped.len() - 1].to_string()
+    }
+
+    /// Remove JSON escapes from a fragment of text.
+    fn json_unescape(string: &str) -> String {
+        // Add quotes.
+        let quoted = format!("\"{}\"", string);
+
+        // Do the unescaping, which also removes the quotes.
+        let value = serde_json::from_str(&quoted).unwrap();
+        if let serde_json::Value::String(unescaped) = value {
+            unescaped
+        } else {
+            panic!()
+        }
     }
 
     /// Read the data from `file_name` and construct a `FileInfo` that we can
@@ -547,11 +562,19 @@ impl Fixer {
         let address = u64::from_str_radix(&captures[4], 16).unwrap();
         let after = &captures[5];
 
+        // In JSON mode, unescape the function name before using it for
+        // lookups, error messages, etc.
+        let raw_in_file_name = if let JsonMode::Yes = self.json_mode {
+            Fixer::json_unescape(in_file_name)
+        } else {
+            in_file_name.to_string()
+        };
+
         // If we haven't seen this file yet, parse and record its contents, for
         // this lookup and any future lookups.
-        let file_info = match self.file_infos.entry(in_file_name.to_string()) {
+        let file_info = match self.file_infos.entry(raw_in_file_name.to_string()) {
             Entry::Occupied(o) => o.into_mut(),
-            Entry::Vacant(v) => match Fixer::build_file_info(in_file_name) {
+            Entry::Vacant(v) => match Fixer::build_file_info(&raw_in_file_name) {
                 Ok(file_info) => v.insert(file_info),
                 Err(op) => {
                     // Print an error message and then set up an empty
@@ -561,32 +584,32 @@ impl Fixer {
                     //   first occurrence.
                     // - The line will still receive some transformation, using
                     //   the "no symbols or debug info" case below.
-                    eprintln!("fix-stacks error: failed to {} `{}`", op, in_file_name);
+                    eprintln!("fix-stacks error: failed to {} `{}`", op, raw_in_file_name);
                     v.insert(FileInfo::default())
                 }
             },
         };
 
-        // If JSON mode is enabled, we need to escape any new strings we
-        // produce. However, strings that came in from the text (i.e.
-        // `in_func_name` and `in_file_name`), will already be escaped, so if
-        // they become part of the output they shouldn't be re-escaped.
+        // In JSON mode, we need to escape any new strings we produce. However,
+        // strings from the input (i.e. `in_func_name` and `in_file_name`),
+        // will already be escaped, so if they are used in the output they
+        // shouldn't be re-escaped.
         if let Some(func_info) = file_info.func_info(address) {
-            let raw_func_name = func_info.demangled_name();
+            let raw_out_func_name = func_info.demangled_name();
             let out_func_name = if let JsonMode::Yes = self.json_mode {
-                Fixer::json_escape(&raw_func_name)
+                Fixer::json_escape(&raw_out_func_name)
             } else {
-                raw_func_name
+                raw_out_func_name
             };
 
             if let Some(line_info) = func_info.line_info(address) {
                 // We have the function name, filename, and line number from
                 // the debug info.
-                let raw_file_name = file_info.interner.get(line_info.path);
+                let raw_out_file_name = file_info.interner.get(line_info.path);
                 let out_file_name = if let JsonMode::Yes = self.json_mode {
-                    Fixer::json_escape(&raw_file_name)
+                    Fixer::json_escape(&raw_out_file_name)
                 } else {
-                    raw_file_name.to_string()
+                    raw_out_file_name.to_string()
                 };
 
                 format!(
