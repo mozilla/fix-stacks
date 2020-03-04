@@ -73,6 +73,19 @@ relative paths such as `tests///////////////////////////mac-normal.c`. (The use
 of many redundant forward slashes is a hack to keep the path the same length,
 which avoids the need for more complex changes to that file.)
 
+### Breakpad symbols
+
+`bpsyms/` was produced on an Ubuntu 19.10 box by `dump_syms` (from a
+development build of Firefox), with these commands:
+```
+# 123456781234567812345678123456789 is a fake UUID whose exact value doesn't
+# matter.
+DIR="bpsyms/example-linux/123456781234567812345678123456789/"
+mkdir $DIR
+# $OBJDIR is the object directory of the Firefox build.
+$OBJDIR/dist/host/bin/dump_syms example-linux > $DIR/example-linux.sym
+```
+
 ## Obtaining the debug info
 
 The unit tests refer to specific addresses within the generated binaries. These

@@ -18,11 +18,17 @@ is changed to something like this in the output:
 Lines that do not match the special stack frame format are passed through
 unchanged.
 
-Because the stack frames produced by `MozFormatCodeAddress()` refer to build
-files (such as libxul), `fix-stacks` must run on the same machine that produced
-the stack frames and the build files. Furthermore, the build files must not
-have changed since the stack frames were produced. Otherwise, source locations
-in the output may be missing or incorrect.
+By default, `fix-stacks` uses native debug info present in binary files. In
+this case, because the stack frames produced by `MozFormatCodeAddress()` refer
+to build files (such as libxul), `fix-stacks` must run on the same machine that
+produced the stack frames and the build files. Furthermore, the build files
+must not have changed since the stack frames were produced. Otherwise, source
+locations in the output may be missing or incorrect.
+
+Alternatively, you can use the `-b` option to tell `fix-stacks` to read
+Breakpad symbol files, as packaged by Firefox. In this case, the processed
+output will contain square brackets instead of parentheses, to make it
+detectable from the output that breakpad symbols were used.
 
 `fix-stacks` works on Linux, Windows, and Mac.
 

@@ -10,6 +10,7 @@ use std::collections::hash_map::Entry;
 use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
+use std::path::{Path, PathBuf};
 use symbolic_common::{Arch, Name};
 use symbolic_debuginfo::{Archive, FileFormat, Function, Object, ObjectDebugSession};
 use symbolic_demangle::{Demangle, DemangleFormat, DemangleOptions};
@@ -253,18 +254,31 @@ struct Fixer {
     re: Regex,
     file_infos: FxHashMap<String, FileInfo>,
     json_mode: JsonMode,
+    bp_syms_dir: Option<String>,
+    lb: char,
+    rb: char,
 }
 
 /// Records address of functions from a symbol table.
 type SymFuncAddrs = FxHashMap<String, u64>;
 
 impl Fixer {
-    fn new(json_mode: JsonMode) -> Fixer {
+    fn new(json_mode: JsonMode, bp_syms_dir: Option<String>) -> Fixer {
+        // We use parentheses with native debug info, and square brackets with
+        // Breakpad symbols.
+        let (lb, rb) = if bp_syms_dir == None {
+            ('(', ')')
+        } else {
+            ('[', ']')
+        };
         Fixer {
             // Matches lines produced by MozFormatCodeAddress().
             re: Regex::new(r"^(.*#\d+: )(.+)\[(.+) \+0x([0-9A-Fa-f]+)\](.*)$").unwrap(),
             file_infos: FxHashMap::default(),
             json_mode,
+            bp_syms_dir,
+            lb,
+            rb,
         }
     }
 
@@ -294,8 +308,14 @@ impl Fixer {
     /// Read the data from `file_name` and construct a `FileInfo` that we can
     /// subsequently query. Return a description of the failing operation on
     /// error.
-    fn build_file_info(file_name: &str) -> Result<FileInfo, String> {
-        let data = fs::read(file_name).map_err(|_| "read")?;
+    fn build_file_info(bin_file: &str, bp_syms_dir: &Option<String>) -> Result<FileInfo, String> {
+        // If we're using Breakpad symbols, we don't consult `bin_file`.
+        if let Some(syms_dir) = bp_syms_dir {
+            return Fixer::build_file_info_breakpad(bin_file, syms_dir);
+        }
+
+        // Otherwise, we read `bin_file`.
+        let data = fs::read(bin_file).map_err(|_| "read")?;
         let file_format = Archive::peek(&data);
         match file_format {
             FileFormat::Elf => Fixer::build_file_info_direct(&data),
@@ -304,6 +324,52 @@ impl Fixer {
             FileFormat::MachO => Fixer::build_file_info_macho(&data),
             _ => Err(format!("parse {} format file", file_format)),
         }
+    }
+
+    fn build_file_info_breakpad(bin_file: &str, syms_dir: &str) -> Result<FileInfo, String> {
+        // We must find the `.sym` file for this `bin_file`, as produced by the
+        // Firefox build system. A running example:
+        // - `bin_file` is `bin/libxul.so`
+        // - `syms_dir` is `syms/`
+        // - The symbols for `libxul.so` are in `syms/libxul.so/<uuid>/libxul.so.sym`
+        let bin_file = Path::new(bin_file);
+
+        // - `pathless_bin_file` is `libxul.so`
+        let pathless_bin_file = bin_file.file_name().ok_or("read breakpad symbols for")?;
+
+        // - `pathless_sym_file` is `libxul.so.sym`
+        let mut pathless_sym_file = pathless_bin_file.to_str().unwrap().to_string();
+        pathless_sym_file.push_str(".sym");
+
+        // - `syms_bin_dir` is `syms/libxul.so/`
+        let mut syms_bin_dir = PathBuf::new();
+        syms_bin_dir.push(&syms_dir);
+        syms_bin_dir.push(&pathless_bin_file);
+
+        // - `syms_bin_entries` iterates over `syms/libxul.so/`
+        let mut syms_bin_entries = fs::read_dir(&syms_bin_dir)
+            .map_err(|_| format!("read breakpad symbols dir `{}` for", syms_bin_dir.display()))?;
+
+        // - `syms_uuid_dir` is `syms/libxul.so/<uuid>/`
+        let syms_uuid_dir = if let (Some(d), None) =
+            (syms_bin_entries.next(), syms_bin_entries.next())
+        {
+            d.map_err(|_| format!("read breakpad symbols dir `{}` for", syms_bin_dir.display()))?
+                .path()
+        } else {
+            return Err(format!(
+                "read breakpad symbols dir `{}` (not exactly one subdir) for",
+                syms_bin_dir.display()
+            ));
+        };
+
+        // `sym_file` is `syms/libxul.so/<uuid>/libxul.so.sym`.
+        let mut sym_file = syms_uuid_dir;
+        sym_file.push(&pathless_sym_file);
+
+        let data = fs::read(&sym_file)
+            .map_err(|_| format!("read symbols file `{}` for", sym_file.display()))?;
+        Fixer::build_file_info_direct(&data)
     }
 
     // "Direct" means that the debug info is within `data`, as opposed to being
@@ -574,20 +640,22 @@ impl Fixer {
         // this lookup and any future lookups.
         let file_info = match self.file_infos.entry(raw_in_file_name.to_string()) {
             Entry::Occupied(o) => o.into_mut(),
-            Entry::Vacant(v) => match Fixer::build_file_info(&raw_in_file_name) {
-                Ok(file_info) => v.insert(file_info),
-                Err(op) => {
-                    // Print an error message and then set up an empty
-                    // `FileInfo` for this file, for two reasons.
-                    // - If an invalid file is mentioned multiple times in the
-                    //   input, an error message will be issued only on the
-                    //   first occurrence.
-                    // - The line will still receive some transformation, using
-                    //   the "no symbols or debug info" case below.
-                    eprintln!("fix-stacks error: failed to {} `{}`", op, raw_in_file_name);
-                    v.insert(FileInfo::default())
+            Entry::Vacant(v) => {
+                match Fixer::build_file_info(&raw_in_file_name, &self.bp_syms_dir) {
+                    Ok(file_info) => v.insert(file_info),
+                    Err(op) => {
+                        // Print an error message and then set up an empty
+                        // `FileInfo` for this file, for two reasons.
+                        // - If an invalid file is mentioned multiple times in the
+                        //   input, an error message will be issued only on the
+                        //   first occurrence.
+                        // - The line will still receive some transformation, using
+                        //   the "no symbols or debug info" case below.
+                        eprintln!("fix-stacks error: failed to {} `{}`", op, raw_in_file_name);
+                        v.insert(FileInfo::default())
+                    }
                 }
-            },
+            }
         };
 
         // In JSON mode, we need to escape any new strings we produce. However,
@@ -613,16 +681,16 @@ impl Fixer {
                 };
 
                 format!(
-                    "{}{} ({}:{}){}",
-                    before, out_func_name, out_file_name, line_info.line, after
+                    "{}{} {}{}:{}{}{}",
+                    before, out_func_name, self.lb, out_file_name, line_info.line, self.rb, after
                 )
             } else {
                 // We have the function name from the debug info, but no file
                 // name or line number. Use the file name and address from the
                 // original input.
                 format!(
-                    "{}{} ({} +0x{:x}){}",
-                    before, out_func_name, in_file_name, address, after
+                    "{}{} {}{} + 0x{:x}{}{}",
+                    before, out_func_name, self.lb, in_file_name, address, self.rb, after
                 )
             }
         } else {
@@ -631,8 +699,8 @@ impl Fixer {
             // same as the original line, but with slightly different
             // formatting.
             format!(
-                "{}{} ({} +0x{:x}){}",
-                before, in_func_name, in_file_name, address, after
+                "{}{} {}{} + 0x{:x}{}{}",
+                before, in_func_name, self.lb, in_file_name, address, self.rb, after
             )
         }
     }
@@ -645,19 +713,31 @@ r##"usage: fix-stacks [options] < input > output
 Post-process the stack frames produced by MozFormatCodeAddress().
 
 options:
-  -h, --help      Show this message and exit
-  -j, --json      Treat input and output as JSON fragments
+  -h, --help          Show this message and exit
+  -j, --json          Treat input and output as JSON fragments
+  -b, --breakpad DIR  Use breakpad symbols in directory DIR
 "##;
 
 fn main_inner() -> io::Result<()> {
-    // Process command line arguments.
+    // Process command line arguments. The arguments are simple enough for now
+    // that using an external crate doesn't seem worthwhile.
     let mut json_mode = JsonMode::No;
-    for arg in env::args().skip(1) {
+    let mut bp_syms_dir = None;
+    let mut args = env::args().skip(1);
+    while let Some(arg) = args.next() {
         if arg == "-h" || arg == "--help" {
             println!("{}", USAGE_MSG);
             return Ok(());
         } else if arg == "-j" || arg == "--json" {
             json_mode = JsonMode::Yes;
+        } else if arg == "-b" || arg == "--breakpad" {
+            match args.next() {
+                Some(arg) if !arg.starts_with('-') => bp_syms_dir = Some(arg),
+                _ => {
+                    let msg = format!("missing or bad argument to option `{}`.", arg);
+                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                }
+            }
         } else {
             let msg = format!(
                 "bad argument `{}`. Run `fix-stacks -h` for more information.",
@@ -669,7 +749,7 @@ fn main_inner() -> io::Result<()> {
 
     let reader = io::BufReader::new(io::stdin());
 
-    let mut fixer = Fixer::new(json_mode);
+    let mut fixer = Fixer::new(json_mode, bp_syms_dir);
     for line in reader.lines() {
         writeln!(io::stdout(), "{}", fixer.fix(line.unwrap()))?;
     }
