@@ -297,7 +297,16 @@ fn test_breakpad() {
     // LINE 0x11d1 line=13 file=/home/njn/moz/fix-stacks/tests/example.c
     // LINE 0x11db line=14 file=/home/njn/moz/fix-stacks/tests/example.c
 
-    let mut fixer = Fixer::new(JsonMode::No, Some("tests/bpsyms".to_string()));
+    // We can use "" for `fileid_exe` because that field is only used for
+    // binaries with multiple Breakpad symbol dirs, which this test doesn't
+    // have.
+    let mut fixer = Fixer::new(
+        JsonMode::No,
+        Some(BreakpadInfo {
+            syms_dir: "tests/bpsyms".to_string(),
+            fileid_exe: "".to_string(),
+        }),
+    );
 
     // Test various addresses.
     let mut func = |name, addr, linenum| {

@@ -26,9 +26,12 @@ must not have changed since the stack frames were produced. Otherwise, source
 locations in the output may be missing or incorrect.
 
 Alternatively, you can use the `-b` option to tell `fix-stacks` to read
-Breakpad symbol files, as packaged by Firefox. In this case, the processed
-output will contain square brackets instead of parentheses, to make it
-detectable from the output that breakpad symbols were used.
+Breakpad symbol files, as packaged by Firefox. The argument must contain two
+paths, separated by a comma: the first path points to the Breakpad symbols
+directory, the second path points to the `fileid` executable in the Firefox
+objdir. In this case, the processed output will contain square brackets instead
+of parentheses, to make it detectable from the output that breakpad symbols
+were used. 
 
 `fix-stacks` works on Linux, Windows, and Mac.
 

@@ -11,6 +11,8 @@ use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::str;
 use symbolic_common::{Arch, Name};
 use symbolic_debuginfo::{Archive, FileFormat, Function, Object, ObjectDebugSession};
 use symbolic_demangle::{Demangle, DemangleFormat, DemangleOptions};
@@ -249,12 +251,18 @@ impl FileInfo {
     }
 }
 
+/// Info provided via the `-b` flag.
+struct BreakpadInfo {
+    syms_dir: String,
+    fileid_exe: String,
+}
+
 /// The top level structure that does the work.
 struct Fixer {
     re: Regex,
     file_infos: FxHashMap<String, FileInfo>,
     json_mode: JsonMode,
-    bp_syms_dir: Option<String>,
+    bp_info: Option<BreakpadInfo>,
     lb: char,
     rb: char,
 }
@@ -263,10 +271,10 @@ struct Fixer {
 type SymFuncAddrs = FxHashMap<String, u64>;
 
 impl Fixer {
-    fn new(json_mode: JsonMode, bp_syms_dir: Option<String>) -> Fixer {
+    fn new(json_mode: JsonMode, bp_info: Option<BreakpadInfo>) -> Fixer {
         // We use parentheses with native debug info, and square brackets with
         // Breakpad symbols.
-        let (lb, rb) = if bp_syms_dir == None {
+        let (lb, rb) = if let None = bp_info {
             ('(', ')')
         } else {
             ('[', ']')
@@ -276,7 +284,7 @@ impl Fixer {
             re: Regex::new(r"^(.*#\d+: )(.+)\[(.+) \+0x([0-9A-Fa-f]+)\](.*)$").unwrap(),
             file_infos: FxHashMap::default(),
             json_mode,
-            bp_syms_dir,
+            bp_info,
             lb,
             rb,
         }
@@ -308,10 +316,10 @@ impl Fixer {
     /// Read the data from `file_name` and construct a `FileInfo` that we can
     /// subsequently query. Return a description of the failing operation on
     /// error.
-    fn build_file_info(bin_file: &str, bp_syms_dir: &Option<String>) -> Result<FileInfo, String> {
+    fn build_file_info(bin_file: &str, bp_info: &Option<BreakpadInfo>) -> Result<FileInfo, String> {
         // If we're using Breakpad symbols, we don't consult `bin_file`.
-        if let Some(syms_dir) = bp_syms_dir {
-            return Fixer::build_file_info_breakpad(bin_file, syms_dir);
+        if let Some(bp_info) = bp_info {
+            return Fixer::build_file_info_breakpad(bin_file, bp_info);
         }
 
         // Otherwise, we read `bin_file`.
@@ -326,7 +334,15 @@ impl Fixer {
         }
     }
 
-    fn build_file_info_breakpad(bin_file: &str, syms_dir: &str) -> Result<FileInfo, String> {
+    fn build_file_info_breakpad(
+        bin_file: &str,
+        bp_info: &BreakpadInfo,
+    ) -> Result<FileInfo, String> {
+        let BreakpadInfo {
+            syms_dir,
+            fileid_exe,
+        } = bp_info;
+
         // We must find the `.sym` file for this `bin_file`, as produced by the
         // Firefox build system. A running example:
         // - `bin_file` is `bin/libxul.so`
@@ -357,10 +373,15 @@ impl Fixer {
             d.map_err(|_| format!("read breakpad symbols dir `{}` for", syms_bin_dir.display()))?
                 .path()
         } else {
-            return Err(format!(
-                "read breakpad symbols dir `{}` (not exactly one subdir) for",
-                syms_bin_dir.display()
-            ));
+            // Use `fileid` to determine the right directory.
+            let output = Command::new(fileid_exe)
+                .arg(&bin_file)
+                .output()
+                .map_err(|_| format!("run `{}` for", fileid_exe))?;
+            let uuid = str::from_utf8(&output.stdout).unwrap().trim_end();
+            let mut syms_uuid_dir = syms_bin_dir;
+            syms_uuid_dir.push(uuid);
+            syms_uuid_dir
         };
 
         // `sym_file` is `syms/libxul.so/<uuid>/libxul.so.sym`.
@@ -641,7 +662,7 @@ impl Fixer {
         let file_info = match self.file_infos.entry(raw_in_file_name.to_string()) {
             Entry::Occupied(o) => o.into_mut(),
             Entry::Vacant(v) => {
-                match Fixer::build_file_info(&raw_in_file_name, &self.bp_syms_dir) {
+                match Fixer::build_file_info(&raw_in_file_name, &self.bp_info) {
                     Ok(file_info) => v.insert(file_info),
                     Err(op) => {
                         // Print an error message and then set up an empty
@@ -713,16 +734,20 @@ r##"usage: fix-stacks [options] < input > output
 Post-process the stack frames produced by MozFormatCodeAddress().
 
 options:
-  -h, --help          Show this message and exit
-  -j, --json          Treat input and output as JSON fragments
-  -b, --breakpad DIR  Use breakpad symbols in directory DIR
+  -h, --help              Show this message and exit
+  -j, --json              Treat input and output as JSON fragments
+  -b, --breakpad DIR,EXE  Use breakpad symbols in directory DIR,
+                          and `fileid` EXE to choose among possibilities
 "##;
 
 fn main_inner() -> io::Result<()> {
     // Process command line arguments. The arguments are simple enough for now
     // that using an external crate doesn't seem worthwhile.
     let mut json_mode = JsonMode::No;
-    let mut bp_syms_dir = None;
+    let mut bp_info = None;
+
+    let err = |msg| Err(io::Error::new(io::ErrorKind::Other, msg));
+
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
         if arg == "-h" || arg == "--help" {
@@ -732,10 +757,19 @@ fn main_inner() -> io::Result<()> {
             json_mode = JsonMode::Yes;
         } else if arg == "-b" || arg == "--breakpad" {
             match args.next() {
-                Some(arg) if !arg.starts_with('-') => bp_syms_dir = Some(arg),
+                Some(arg2) => {
+                    let v: Vec<_> = arg2.split(',').collect();
+                    if v.len() == 2 {
+                        bp_info = Some(BreakpadInfo {
+                            syms_dir: v[0].to_string(),
+                            fileid_exe: v[1].to_string(),
+                        });
+                    } else {
+                        return err(format!("bad argument `{}` to option `{}`.", arg2, arg));
+                    }
+                }
                 _ => {
-                    let msg = format!("missing or bad argument to option `{}`.", arg);
-                    return Err(io::Error::new(io::ErrorKind::Other, msg));
+                    return err(format!("missing argument to option `{}`.", arg));
                 }
             }
         } else {
@@ -743,13 +777,13 @@ fn main_inner() -> io::Result<()> {
                 "bad argument `{}`. Run `fix-stacks -h` for more information.",
                 arg
             );
-            return Err(io::Error::new(io::ErrorKind::Other, msg));
+            return err(msg);
         }
     }
 
     let reader = io::BufReader::new(io::stdin());
 
-    let mut fixer = Fixer::new(json_mode, bp_syms_dir);
+    let mut fixer = Fixer::new(json_mode, bp_info);
     for line in reader.lines() {
         writeln!(io::stdout(), "{}", fixer.fix(line.unwrap()))?;
     }
