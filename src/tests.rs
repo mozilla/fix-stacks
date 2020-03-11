@@ -7,7 +7,7 @@ use crate::*;
 
 #[test]
 fn test_linux() {
-    // The debug info within `example-linux` is as follows. (See
+    // The native debug info within `example-linux` is as follows. (See
     // `tests/README.md` for details on how these lines were generated.)
     //
     //   FUNC 0x1130 size=40 func=main
@@ -31,7 +31,7 @@ fn test_linux() {
     //   LINE 0x11cd line=13 file=/home/njn/moz/fix-stacks/tests/example.c
     //   LINE 0x11db line=14 file=/home/njn/moz/fix-stacks/tests/example.c
 
-    let mut fixer = Fixer::new(JsonMode::No);
+    let mut fixer = Fixer::new(JsonMode::No, None);
 
     // Test various addresses.
     let mut func = |name, addr, linenum| {
@@ -62,13 +62,13 @@ fn test_linux() {
     func("g", 0x11de, 14);
 
     // Try a new Fixer.
-    fixer = Fixer::new(JsonMode::No);
+    fixer = Fixer::new(JsonMode::No, None);
 
     // Test various addresses outside `main`, `f`, and `g`.
     let mut outside = |addr| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
         let line_actual = fixer.fix(line);
-        let line_expected = format!("#00: ??? (tests/example-linux +0x{:x})", addr);
+        let line_expected = format!("#00: ??? (tests/example-linux + 0x{:x})", addr);
         assert_eq!(line_expected, line_actual);
     };
     outside(0x0); // A very low address.
@@ -80,7 +80,7 @@ fn test_linux() {
 
 #[test]
 fn test_windows() {
-    // The debug info within `example-windows.pdb` is as follows. (See
+    // The native debug info within `example-windows.pdb` is as follows. (See
     // `tests/README.md` for details on how these lines were generated.)
     //
     //   FUNC 0x6bc0 size=39 func=main
@@ -110,7 +110,7 @@ fn test_windows() {
     // outputs contains backwards slashes, though, because that is what is used
     // within the debug info.
 
-    let mut fixer = Fixer::new(JsonMode::Yes);
+    let mut fixer = Fixer::new(JsonMode::Yes, None);
 
     // Test various addresses using `example-windows`, which redirects to
     // `example-windows.pdb`.
@@ -143,14 +143,14 @@ fn test_windows() {
     func("g", 0x6c63, 14);
 
     // Try a new Fixer, without JSON mode.
-    fixer = Fixer::new(JsonMode::No);
+    fixer = Fixer::new(JsonMode::No, None);
 
     // Test various addresses outside `main`, `f`, and `g`, using
     // `example-windows.pdb` directly.
     let mut outside = |addr| {
         let line = format!("#00: foobar[tests/example-windows.pdb +0x{:x}]", addr);
         let line_actual = fixer.fix(line);
-        let line_expected = format!("#00: foobar (tests/example-windows.pdb +0x{:x})", addr);
+        let line_expected = format!("#00: foobar (tests/example-windows.pdb + 0x{:x})", addr);
         assert_eq!(line_expected, line_actual);
     };
     outside(0x0); // A very low address.
@@ -162,8 +162,8 @@ fn test_windows() {
 
 #[test]
 fn test_mac() {
-    // The debug info within `mac-multi` is as follows. (See `tests/README.md`
-    // for details on how these lines were generated.)
+    // The native debug info within `mac-multi` is as follows. (See
+    // `tests/README.md` for details on how these lines were generated.)
     //
     //   FUNC 0xd70 size=54 func=main
     //   LINE 0xd70 line=17 file=/Users/njn/moz/fix-stacks/tests/mac-normal.c
@@ -229,7 +229,7 @@ fn test_mac() {
     //   LINE 0xf38 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
     //   LINE 0xf49 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
 
-    let mut fixer = Fixer::new(JsonMode::No);
+    let mut fixer = Fixer::new(JsonMode::No, None);
 
     // Test addresses from all the object files that `mac-multi` references.
     let mut func = |name, addr, full_path, locn| {
@@ -255,7 +255,7 @@ fn test_mac() {
     func("lib1_A", 0xe95, true, "mac-lib1.c:15");
     // This should be `duplicate` in `mac-lib1.c`. It's wrong due to the
     // archive suffix stripping mentioned above.
-    func("???", 0xeaa, false, "mac-multi +0xeaa");
+    func("???", 0xeaa, false, "mac-multi + 0xeaa");
 
     func("lib2_B", 0xedc, true, "mac-lib2.c:20");
     func("lib2_A", 0xf1e, true, "mac-lib2.c:16");
@@ -265,8 +265,87 @@ fn test_mac() {
 }
 
 #[test]
+fn test_breakpad() {
+    // The breakpad symbols debug info within `example-linux` is as follows.
+    // (See `tests/README.md` for details on how these lines were generated.)
+    //
+    // FUNC 0x1130 size=40 func=main
+    // LINE 0x1130 line=24 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x113f line=25 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1146 line=26 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x114f line=27 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1152 line=27 file=/home/njn/moz/fix-stacks/tests/example.c
+    //
+    // FUNC 0x1160 size=69 func=f
+    // LINE 0x1160 line=16 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x116c line=17 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1170 line=17 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1177 line=18 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x117b line=18 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1180 line=19 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1184 line=19 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x118b line=20 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x118f line=20 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1194 line=21 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x1198 line=21 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x119f line=22 file=/home/njn/moz/fix-stacks/tests/example.c
+    //
+    // FUNC 0x11b0 size=49 func=g
+    // LINE 0x11b0 line=11 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x11bc line=12 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x11cd line=13 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x11d1 line=13 file=/home/njn/moz/fix-stacks/tests/example.c
+    // LINE 0x11db line=14 file=/home/njn/moz/fix-stacks/tests/example.c
+
+    // We can use "" for `fileid_exe` because that field is only used for
+    // binaries with multiple Breakpad symbol dirs, which this test doesn't
+    // have.
+    let mut fixer = Fixer::new(
+        JsonMode::No,
+        Some(BreakpadInfo {
+            syms_dir: "tests/bpsyms".to_string(),
+            fileid_exe: "".to_string(),
+        }),
+    );
+
+    // Test various addresses.
+    let mut func = |name, addr, linenum| {
+        let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
+        let line = fixer.fix(line);
+        assert_eq!(
+            line,
+            format!(
+                "#00: {} [/home/njn/moz/fix-stacks/tests/example.c:{}]",
+                name, linenum
+            )
+        );
+    };
+    func("main", 0x1130, 24);
+    func("main", 0x113f, 25);
+    func("main", 0x1146, 26);
+    func("main", 0x1157, 27);
+    func("f", 0x1160, 16);
+    func("f", 0x1180, 19);
+    func("g", 0x11bc, 12);
+    func("g", 0x11de, 14);
+
+    // Test various addresses outside `main`, `f`, and `g`.
+    let mut outside = |addr| {
+        let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
+        let line_actual = fixer.fix(line);
+        let line_expected = format!("#00: ??? [tests/example-linux + 0x{:x}]", addr);
+        assert_eq!(line_expected, line_actual);
+    };
+    outside(0x0); // A very low address.
+    outside(0x999); // Well before the start of main.
+    outside(0x112f); // One byte before the start of `main`.
+    outside(0x1158); // One byte past the end of `main`.
+    outside(0xfffffff); // A very high address.
+}
+
+#[test]
 fn test_regex() {
-    let mut fixer = Fixer::new(JsonMode::No);
+    let mut fixer = Fixer::new(JsonMode::No, None);
 
     // Test various different unchanged line forms, that don't match the regex.
     let mut unchanged = |line: &str| {
@@ -301,7 +380,7 @@ fn test_regex() {
 
 #[test]
 fn test_files() {
-    let mut fixer = Fixer::new(JsonMode::Yes);
+    let mut fixer = Fixer::new(JsonMode::Yes, None);
 
     // Test various different file errors. An error message is also printed to
     // stderr for each one, but we don't test for that.
@@ -312,16 +391,13 @@ fn test_files() {
     // No such file.
     file_error(
         "#00: ???[tests/no-such-file +0x0]",
-        "#00: ??? (tests/no-such-file +0x0)",
+        "#00: ??? (tests/no-such-file + 0x0)",
     );
     // No such file, with backslashes (which tests JSON escaping).
     file_error(
         "#00: ???[tests\\no-such-dir\\\\no-such-file +0x0]",
-        "#00: ??? (tests\\no-such-dir\\\\no-such-file +0x0)",
+        "#00: ??? (tests\\no-such-dir\\\\no-such-file + 0x0)",
     );
     // File exists, but has the wrong format.
-    file_error(
-        "#00: ???[src/main.rs +0x0]",
-        "#00: ??? (src/main.rs +0x0)",
-    );
+    file_error("#00: ???[src/main.rs +0x0]", "#00: ??? (src/main.rs + 0x0)");
 }
