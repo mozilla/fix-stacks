@@ -336,41 +336,58 @@ impl Fixer {
 
     fn build_file_info_breakpad(
         bin_file: &str,
-        bp_info: &BreakpadInfo,
-    ) -> Result<FileInfo, String> {
-        let BreakpadInfo {
+        BreakpadInfo {
             syms_dir,
             fileid_exe,
-        } = bp_info;
-
+        }: &BreakpadInfo,
+    ) -> Result<FileInfo, String> {
         // We must find the `.sym` file for this `bin_file`, as produced by the
-        // Firefox build system. A running example:
-        // - `bin_file` is `bin/libxul.so`
-        // - `syms_dir` is `syms/`
-        // - The symbols for `libxul.so` are in `syms/libxul.so/<uuid>/libxul.so.sym`
+        // Firefox build system, which is in the symbols directory under
+        // `<db_seg>/<uuid_seg>/<sym_seg>`.
+        //
+        // A running example:
+        // - Unix and windows: `syms_dir` is `syms/`
+        // - Unix: `bin_file` is `bin/libxul.so`
+        // - Unix: symbols are in `syms/libxul.so/<uuid>/libxul.so.sym`
+        // - Windows: `bin_file` is bin/xul.dll`
+        // - Windows: symbols are in `syms/xul.pdb/<uuid>/xul.sym`
         let bin_file = Path::new(bin_file);
 
-        // - `pathless_bin_file` is `libxul.so`
-        let pathless_bin_file = bin_file.file_name().ok_or("read breakpad symbols for")?;
+        // - Unix: `bin_base` is `libxul.so`
+        // - Windows: `bin_base` is `xul`
+        let mut bin_base = bin_file
+            .file_name()
+            .ok_or("read breakpad symbols for")?
+            .to_str()
+            .unwrap()
+            .to_string();
+        let is_win = bin_base.ends_with(".dll") || bin_base.ends_with(".exe");
+        if is_win {
+            bin_base.truncate(bin_base.len() - 4);
+        }
 
-        // - `pathless_sym_file` is `libxul.so.sym`
-        let mut pathless_sym_file = pathless_bin_file.to_str().unwrap().to_string();
-        pathless_sym_file.push_str(".sym");
+        // - Unix: `db_seg` is `libxul.so`
+        // - Windows: `db_seg` is `xul.pdb`
+        let mut db_seg = bin_base.clone();
+        if is_win {
+            db_seg.push_str(".pdb");
+        }
 
-        // - `syms_bin_dir` is `syms/libxul.so/`
-        let mut syms_bin_dir = PathBuf::new();
-        syms_bin_dir.push(&syms_dir);
-        syms_bin_dir.push(&pathless_bin_file);
+        // - Unix: `db_dir` is `syms/libxul.so/`
+        // - Windows: `db_dir` is `syms/xul.pdb/`
+        let mut db_dir = PathBuf::new();
+        db_dir.push(&syms_dir);
+        db_dir.push(&db_seg);
 
-        // - `syms_bin_entries` iterates over `syms/libxul.so/`
-        let mut syms_bin_entries = fs::read_dir(&syms_bin_dir)
-            .map_err(|_| format!("read breakpad symbols dir `{}` for", syms_bin_dir.display()))?;
+        // - Unix: `db_entries` iterates over `syms/libxul.so/`
+        // - Windows: `db_entries` iterates over `syms/xul.pdb/`
+        let mut db_entries = fs::read_dir(&db_dir)
+            .map_err(|_| format!("read breakpad symbols dir `{}` for", db_dir.display()))?;
 
-        // - `syms_uuid_dir` is `syms/libxul.so/<uuid>/`
-        let syms_uuid_dir = if let (Some(d), None) =
-            (syms_bin_entries.next(), syms_bin_entries.next())
-        {
-            d.map_err(|_| format!("read breakpad symbols dir `{}` for", syms_bin_dir.display()))?
+        // - Unix: `uuid_dir` is `syms/libxul.so/<uuid>/`
+        // - Windows: `uuid_dir` is `syms/xul.pdb/<uuid>/`
+        let uuid_dir = if let (Some(d), None) = (db_entries.next(), db_entries.next()) {
+            d.map_err(|_| format!("read breakpad symbols dir `{}` for", db_dir.display()))?
                 .path()
         } else {
             // Use `fileid` to determine the right directory.
@@ -378,15 +395,21 @@ impl Fixer {
                 .arg(&bin_file)
                 .output()
                 .map_err(|_| format!("run `{}` for", fileid_exe))?;
-            let uuid = str::from_utf8(&output.stdout).unwrap().trim_end();
-            let mut syms_uuid_dir = syms_bin_dir;
-            syms_uuid_dir.push(uuid);
-            syms_uuid_dir
+            let uuid_seg = str::from_utf8(&output.stdout).unwrap().trim_end();
+            let mut uuid_dir = db_dir;
+            uuid_dir.push(uuid_seg);
+            uuid_dir
         };
 
-        // `sym_file` is `syms/libxul.so/<uuid>/libxul.so.sym`.
-        let mut sym_file = syms_uuid_dir;
-        sym_file.push(&pathless_sym_file);
+        // - Unix: `sym_seg` is `libxul.so.sym`
+        // - Windows: `sym_seg` is `xul.sym`
+        let mut sym_seg = bin_base.clone();
+        sym_seg.push_str(".sym");
+
+        // - Unix: `sym_file` is `syms/libxul.so/<uuid>/libxul.so.sym`.
+        // - Windows: `sym_file` is `syms/xul.pdb/<uuid>/xul.sym`.
+        let mut sym_file = uuid_dir;
+        sym_file.push(&sym_seg);
 
         let data = fs::read(&sym_file)
             .map_err(|_| format!("read symbols file `{}` for", sym_file.display()))?;
