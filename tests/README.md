@@ -28,7 +28,7 @@ all generated within the `test` directory in the following ways.
 ### Linux
 
 `example-linux` was produced on an Ubuntu 19.04 box by clang 8.0 with this
-command:
+command within `tests/`:
 ```
 clang -g example.c -o example-linux
 ```
@@ -36,7 +36,7 @@ clang -g example.c -o example-linux
 ### Windows
 
 `example-windows.exe` and `example-windows.pdb` were produced on a Windows 10
- laptop by clang 9.0 with this command:
+ laptop by clang 9.0 with this command within `tests/`:
 ```
 clang -g example.c -o example-windows.exe
 ```
@@ -52,7 +52,7 @@ The Mac tests are more complex because `fix-stacks`'s code for handling Mach-O
 binaries is more complex than other formats.
 
 `mac-multi` was produced on a MacBook Pro running macOS 10.14 by Apple clang
-11.0 with these commands:
+11.0 with these commands within `tests/`:
 ```
 # A normal file.
 clang -c -g mac-normal.c -o mac-normal.o
@@ -75,8 +75,8 @@ which avoids the need for more complex changes to that file.)
 
 ### Breakpad symbols
 
-`bpsyms/` was produced on an Ubuntu 19.10 box by `dump_syms` (from a
-development build of Firefox), with these commands:
+`bpsyms/example-linux/` was produced on an Ubuntu 19.10 box by `dump_syms`
+(from a development build of Firefox), with these commands within `tests/`:
 ```
 # 123456781234567812345678123456789 is a fake UUID whose exact value doesn't
 # matter.
@@ -84,6 +84,18 @@ DIR="bpsyms/example-linux/123456781234567812345678123456789/"
 mkdir $DIR
 # $OBJDIR is the object directory of the Firefox build.
 $OBJDIR/dist/host/bin/dump_syms example-linux > $DIR/example-linux.sym
+```
+
+`bpsyms/example-windows.pdb/` was produced on Windows 10 laptop by
+`dump_syms.exe`, with these commands within `tests/`:
+```
+# $SRCDIR is the source directory of a Firfox build.
+$SRCDIR/mach artifact toolchain --from-build win64-dump-syms
+# 123456781234567812345678123456789 is a fake UUID whose exact value doesn't
+# matter.
+DIR="bpsyms/example-windows.pdb/123456781234567812345678123456789/"
+mkdir $DIR
+dump_syms/dump_syms.exe example-windows.exe > $DIR/example-windows.sym
 ```
 
 ## Obtaining the debug info

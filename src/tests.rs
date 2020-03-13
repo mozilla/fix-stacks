@@ -265,9 +265,10 @@ fn test_mac() {
 }
 
 #[test]
-fn test_breakpad() {
-    // The breakpad symbols debug info within `example-linux` is as follows.
-    // (See `tests/README.md` for details on how these lines were generated.)
+fn test_linux_breakpad() {
+    // The breakpad symbols debug info within `bpsyms/example-linux/` is as
+    // follows. (See `tests/README.md` for details on how these lines were
+    // generated.)
     //
     // FUNC 0x1130 size=40 func=main
     // LINE 0x1130 line=24 file=/home/njn/moz/fix-stacks/tests/example.c
@@ -337,9 +338,76 @@ fn test_breakpad() {
         assert_eq!(line_expected, line_actual);
     };
     outside(0x0); // A very low address.
-    outside(0x999); // Well before the start of main.
-    outside(0x112f); // One byte before the start of `main`.
-    outside(0x1158); // One byte past the end of `main`.
+    outside(0xfffffff); // A very high address.
+}
+
+#[test]
+fn test_windows_breakpad() {
+    // The breakpad symbols debug info within `bpsyms/example-windows.pdb/` is
+    // as follows. (See `tests/README.md` for details on how these lines were
+    // generated.)
+    //
+    // FUNC 0x6bc0 size=39 func=main
+    // LINE 0x6bc0 line=24 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6bcc line=25 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6bd4 line=26 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6bde line=27 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    //
+    // FUNC 0x6bf0 size=70 func=f
+    // LINE 0x6bf0 line=16 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6bf9 line=17 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c05 line=18 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c0f line=19 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c1b line=20 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c25 line=21 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c31 line=22 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    //
+    // FUNC 0x6c40 size=38 func=g
+    // LINE 0x6c40 line=11 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c49 line=12 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c55 line=13 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+    // LINE 0x6c61 line=14 file=c:\Users\njn\moz\fix-stacks\tests\example.c
+
+    // We can use "" for `fileid_exe` because that field is only used for
+    // binaries with multiple Breakpad symbol dirs, which this test doesn't
+    // have.
+    let mut fixer = Fixer::new(
+        JsonMode::No,
+        Some(BreakpadInfo {
+            syms_dir: "tests/bpsyms".to_string(),
+            fileid_exe: "".to_string(),
+        }),
+    );
+
+    // Test various addresses.
+    let mut func = |name, addr, linenum| {
+        let line = format!("#00: ???[tests/example-windows.exe +0x{:x}]", addr);
+        let line = fixer.fix(line);
+        assert_eq!(
+            line,
+            format!(
+                "#00: {} [c:\\Users\\njn\\moz\\fix-stacks\\tests\\example.c:{}]",
+                name, linenum
+            )
+        );
+    };
+    func("main()", 0x6bc0, 24);
+    func("main()", 0x6bce, 25);
+    func("main()", 0x6bd4, 26);
+    func("main()", 0x6bdf, 27);
+    func("f(int*)", 0x6bf0, 16);
+    func("f(int*)", 0x6c0f, 19);
+    func("g(int*)", 0x6c49, 12);
+    func("g(int*)", 0x6c61, 14);
+
+    // Test various addresses outside `main`, `f`, and `g`.
+    let mut outside = |addr| {
+        let line = format!("#00: ???[tests/example-windows.exe +0x{:x}]", addr);
+        let line_actual = fixer.fix(line);
+        let line_expected = format!("#00: ??? [tests/example-windows.exe + 0x{:x}]", addr);
+        assert_eq!(line_expected, line_actual);
+    };
+    outside(0x0); // A very low address.
     outside(0xfffffff); // A very high address.
 }
 
