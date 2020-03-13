@@ -35,12 +35,12 @@ clang -g example.c -o example-linux
 
 ### Windows
 
-`example-windows` and `example-windows.pdb` were produced on a Windows 10 laptop
- by clang 9.0 with this command:
+`example-windows.exe` and `example-windows.pdb` were produced on a Windows 10
+ laptop by clang 9.0 with this command:
 ```
-clang -g example.c -o example-windows
+clang -g example.c -o example-windows.exe
 ```
-`example-windows` was then hex-edited to change the PDB reference from the
+`example-windows.exe` was then hex-edited to change the PDB reference from the
 absolute path `c:\Users\njn\moz\fix-stacks\tests\example-windows.pdb` to the
 relative path `tests/////////////////////////////example-windows.pdb`. (The use
 of many redundant forward slashes is a hack to keep the path the same length,

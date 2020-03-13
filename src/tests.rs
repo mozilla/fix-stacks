@@ -112,10 +112,10 @@ fn test_windows() {
 
     let mut fixer = Fixer::new(JsonMode::Yes, None);
 
-    // Test various addresses using `example-windows`, which redirects to
+    // Test various addresses using `example-windows.exe`, which redirects to
     // `example-windows.pdb`.
     let mut func = |name, addr, linenum| {
-        let line = format!("#00: ???[tests/example-windows +0x{:x}]", addr);
+        let line = format!("#00: ???[tests/example-windows.exe +0x{:x}]", addr);
         let line = fixer.fix(line);
         assert_eq!(
             line,
