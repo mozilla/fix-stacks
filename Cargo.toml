@@ -8,19 +8,9 @@ license = "MIT/Apache-2.0"
 [dependencies]
 fxhash = "0.2.1"
 goblin = "0.1.2"
-regex = "1.0"
+regex = "1.3.5"
 serde_json = "1.0"
 
-# FIXME(https://github.com/mozilla/fix-stacks/issues/2): at the time of
-# writing, 6.1.4 is the latest version of `symbolic` on crates.io, but this dev
-# version of 7.0.0 fixes some API botches (`ObjectDebugSession::functions()`
-# being private). Once 7.0.0 is released, we can switch to it.
-#
-# FIXME(https://github.com/mozilla/fix-stacks/issues/11): if/when my
-# symbolic-debuginfo changes land
-# (https://github.com/getsentry/symbolic/pull/173), change these to point again
-# to the `getsentry` repo.
-#
-symbolic-common = { git = "https://github.com/nnethercote/symbolic/", rev = "7d4ca78958aab62104a9fc18bb17cdba616d7a63" }
-symbolic-debuginfo = { git = "https://github.com/nnethercote/symbolic/", rev = "7d4ca78958aab62104a9fc18bb17cdba616d7a63" }
-symbolic-demangle = { git = "https://github.com/nnethercote/symbolic/", rev = "7d4ca78958aab62104a9fc18bb17cdba616d7a63" }
+symbolic-common = "7.1.1"
+symbolic-debuginfo = "7.1.1"
+symbolic-demangle = "7.1.1"
