@@ -432,7 +432,7 @@ impl Fixer {
         // - Windows: `db_entries` iterates over `syms/xul.pdb/`
         let mut db_entries = fs::read_dir(&db_dir).fix_err_with_note(
             format!("read breakpad symbols dir `{}` for", db_dir.display()),
-            "this is expected and harmless for system binaries on automation",
+            "this is expected and harmless for system libraries on debug automation runs",
         )?;
 
         // - Unix: `uuid_dir` is `syms/libxul.so/<uuid>/`
@@ -488,7 +488,7 @@ impl Fixer {
         let pdb_file_name = pe.debug_file_name().fix_err("find debug info file for")?;
         let data = fs::read(pdb_file_name.to_string()).fix_err_with_note(
             format!("read debug info file `{}` for", pdb_file_name),
-            "this is expected and harmless for all PDB files on automation",
+            "this is expected and harmless for all PDB files on opt automation runs",
         )?;
         Fixer::build_file_info_direct(&data)
     }
@@ -548,7 +548,7 @@ impl Fixer {
                     // It's a normal object file. Read it.
                     let data = fs::read(oso_name).fix_err_with_note(
                         format!("read object file `{}` referenced by", oso_name),
-                        "this is expected and harmless for all Mac object files on automation",
+                        "this is expected and harmless for all Mac object files on opt automation runs",
                     )?;
                     Fixer::do_macho_oso(
                         &sym_func_addrs,
