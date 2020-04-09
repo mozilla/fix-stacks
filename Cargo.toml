@@ -14,3 +14,6 @@ serde_json = "1.0"
 symbolic-common = "7.1.1"
 symbolic-debuginfo = "7.1.1"
 symbolic-demangle = "7.1.1"
+
+[profile.release]
+lto = true
