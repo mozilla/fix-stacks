@@ -1,6 +1,6 @@
 MODULE Linux x86_64 BE4E976C325246EE9D6B7847A670B2A90 example-linux
 INFO CODE_ID 6C974EBE5232EE469D6B7847A670B2A956F8AEDE
-FILE 0 /home/njn/moz/fix-stacks/tests/example.c
+FILE 0 hg:hg.mozilla.org/integration/autoland:/home/njn/moz/fix-stacks/tests/example.c:94d31f914f29e72dd81a8880100d12f67e48a5b0
 FUNC 1130 28 0 main
 1130 f 24 0
 113f 7 25 0
