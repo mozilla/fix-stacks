@@ -86,6 +86,10 @@ mkdir $DIR
 $OBJDIR/dist/host/bin/dump_syms example-linux > $DIR/example-linux.sym
 ```
 
+`example-linux.sym` was then edited to change the `FILE` line mentioning
+`example.c` to be prefixed with a Mercurial repository and suffixed with a
+revision ID, in order to test the removal of this Firefox Breakpad junk.
+
 `bpsyms/example-windows.pdb/` was produced on Windows 10 laptop by
 `dump_syms.exe`, with these commands within `tests/`:
 ```

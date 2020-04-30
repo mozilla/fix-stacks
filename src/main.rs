@@ -667,6 +667,47 @@ impl Fixer {
         }
     }
 
+    /// Strip any annoying Firefox Breakpad junk from this filename. E.g.
+    /// `hg:hg.mozilla.org/integration/autoland:caps/BasePrincipal.cpp:04c31e994f29e72dd81a7340100d12f67e48a5b4`
+    /// becomes `caps/BasePrincipal.cpp`.
+    ///
+    /// It's not perfect, e.g. it will fail if the filename contains a colon.
+    /// But that should happen almost never, and if it does the junk won't be
+    /// stripped, which is still a reasonable outcome.
+    fn strip_firefox_breakpad_junk(file_name: &str) -> Option<&str> {
+        // Split on the colons.
+        let mut iter = file_name.split(':');
+
+        // Is the first element "hg"?
+        let s1 = iter.next()?;
+        if s1 != "hg" {
+            return None;
+        }
+
+        // Does the second element start with "hg.mozilla.org"?
+        let s2 = iter.next()?;
+        if !s2.starts_with("hg.mozilla.org") {
+            return None;
+        }
+
+        // The third element is the one we want.
+        let s3 = iter.next()?;
+
+        // Is the fourth element a hex id of length 40?
+        let s4 = iter.next()?;
+        if s4.len() != 40 || !s4.chars().all(|c| c.is_ascii_hexdigit()) {
+            return None;
+        }
+
+        // Is there no fifth element?
+        if let Some(_) = iter.next() {
+            return None;
+        }
+
+        // It's a match. Return the interesting part.
+        Some(s3)
+    }
+
     /// Read the debug info from a file referenced by an OSO entry in a Macho-O
     /// symbol table.
     fn do_macho_oso(
@@ -784,10 +825,19 @@ impl Fixer {
                 // We have the function name, filename, and line number from
                 // the debug info.
                 let raw_out_file_name = file_info.interner.get(line_info.path);
-                let out_file_name = if let JsonMode::Yes = self.json_mode {
-                    Fixer::json_escape(&raw_out_file_name)
+                let out_file_name_str;
+                let mut out_file_name = if let JsonMode::Yes = self.json_mode {
+                    out_file_name_str = Fixer::json_escape(&raw_out_file_name);
+                    &out_file_name_str
                 } else {
-                    raw_out_file_name.to_string()
+                    raw_out_file_name
+                };
+
+                // Maybe strip some junk from Breakpad file names.
+                if let Some(_) = self.bp_info {
+                    if let Some(stripped) = Fixer::strip_firefox_breakpad_junk(&out_file_name) {
+                        out_file_name = stripped
+                    }
                 };
 
                 format!(
