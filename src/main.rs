@@ -3,6 +3,8 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
+use anyhow::{bail, Context, Result};
+use failure::Fail;
 use fxhash::{FxHashMap, FxHashSet};
 use goblin::{archive, mach};
 use regex::Regex;
@@ -267,55 +269,6 @@ struct Fixer {
     rb: char,
 }
 
-/// A fixing error.
-struct FixErr {
-    // The operation underway. Printed in an error message of the form "failed
-    // to <op> <filename>".
-    op: String,
-
-    // An optional note printed on the line under the error message.
-    note: Option<String>,
-}
-
-/// A trait for turning a result-like type (e.g. `Result` or `Option`) into
-/// a `Result<T, FixErr>`.
-trait ToFixErr<S, T> {
-    fn fix_err(self, op: S) -> Result<T, FixErr>;
-    fn fix_err_with_note(self, op: S, note: &str) -> Result<T, FixErr>;
-}
-
-impl<S, T> ToFixErr<S, T> for Option<T>
-where
-    S: Into<String>,
-{
-    fn fix_err(self, op: S) -> Result<T, FixErr> {
-        self.ok_or(FixErr {
-            op: op.into(),
-            note: None,
-        })
-    }
-
-    fn fix_err_with_note(self, op: S, note: &str) -> Result<T, FixErr> {
-        self.ok_or(FixErr {
-            op: op.into(),
-            note: Some(note.into()),
-        })
-    }
-}
-
-impl<S, T, E> ToFixErr<S, T> for Result<T, E>
-where
-    S: Into<String>,
-{
-    fn fix_err(self, op: S) -> Result<T, FixErr> {
-        self.ok().fix_err(op)
-    }
-
-    fn fix_err_with_note(self, op: S, note: &str) -> Result<T, FixErr> {
-        self.ok().fix_err_with_note(op, note)
-    }
-}
-
 /// Records address of functions from a symbol table.
 type SymFuncAddrs = FxHashMap<String, u64>;
 
@@ -365,21 +318,21 @@ impl Fixer {
     /// Read the data from `file_name` and construct a `FileInfo` that we can
     /// subsequently query. Return a description of the failing operation on
     /// error.
-    fn build_file_info(bin_file: &str, bp_info: &Option<BreakpadInfo>) -> Result<FileInfo, FixErr> {
+    fn build_file_info(bin_file: &str, bp_info: &Option<BreakpadInfo>) -> Result<FileInfo> {
         // If we're using Breakpad symbols, we don't consult `bin_file`.
         if let Some(bp_info) = bp_info {
             return Fixer::build_file_info_breakpad(bin_file, bp_info);
         }
 
         // Otherwise, we read `bin_file`.
-        let data = fs::read(bin_file).fix_err("read")?;
+        let data = fs::read(bin_file).context("read")?;
         let file_format = Archive::peek(&data);
         match file_format {
             FileFormat::Elf => Fixer::build_file_info_direct(&data),
             FileFormat::Pe => Fixer::build_file_info_pe(&data),
             FileFormat::Pdb => Fixer::build_file_info_direct(&data),
             FileFormat::MachO => Fixer::build_file_info_macho(&data),
-            _ => Err(()).fix_err(format!("parse {} format file", file_format)),
+            _ => bail!("parse {} format file", file_format),
         }
     }
 
@@ -389,7 +342,7 @@ impl Fixer {
             syms_dir,
             fileid_exe,
         }: &BreakpadInfo,
-    ) -> Result<FileInfo, FixErr> {
+    ) -> Result<FileInfo> {
         // We must find the `.sym` file for this `bin_file`, as produced by the
         // Firefox build system, which is in the symbols directory under
         // `<db_seg>/<uuid_seg>/<sym_seg>`.
@@ -406,7 +359,7 @@ impl Fixer {
         // - Windows: `bin_base` is `xul`
         let mut bin_base = bin_file
             .file_name()
-            .fix_err("read breakpad symbols for")?
+            .context("read breakpad symbols for")?
             .to_str()
             .unwrap()
             .to_string();
@@ -430,25 +383,23 @@ impl Fixer {
 
         // - Unix: `db_entries` iterates over `syms/libxul.so/`
         // - Windows: `db_entries` iterates over `syms/xul.pdb/`
-        let mut db_entries = fs::read_dir(&db_dir).fix_err_with_note(
-            format!("read breakpad symbols dir `{}` for", db_dir.display()),
-            "this is expected and harmless for system libraries on debug automation runs",
-        )?;
+        let mut db_entries = fs::read_dir(&db_dir)
+            .context(
+                "note: this is expected and harmless for system libraries on debug automation runs",
+            )
+            .with_context(|| format!("read breakpad symbols dir `{}` for", db_dir.display()))?;
 
         // - Unix: `uuid_dir` is `syms/libxul.so/<uuid>/`
         // - Windows: `uuid_dir` is `syms/xul.pdb/<uuid>/`
         let uuid_dir = if let (Some(d), None) = (db_entries.next(), db_entries.next()) {
-            d.fix_err(format!(
-                "read breakpad symbols dir `{}` for",
-                db_dir.display()
-            ))?
-            .path()
+            d.with_context(|| format!("read breakpad symbols dir `{}` for", db_dir.display()))?
+                .path()
         } else {
             // Use `fileid` to determine the right directory.
             let output = Command::new(fileid_exe)
                 .arg(&bin_file)
                 .output()
-                .fix_err(format!("run `{}` for", fileid_exe))?;
+                .with_context(|| format!("run `{}` for", fileid_exe))?;
             let uuid_seg = str::from_utf8(&output.stdout).unwrap().trim_end();
             let mut uuid_dir = db_dir;
             uuid_dir.push(uuid_seg);
@@ -466,34 +417,40 @@ impl Fixer {
         sym_file.push(&sym_seg);
 
         let data = fs::read(&sym_file)
-            .fix_err(format!("read symbols file `{}` for", sym_file.display()))?;
+            .with_context(|| format!("read symbols file `{}` for", sym_file.display()))?;
         Fixer::build_file_info_direct(&data)
     }
 
     // "Direct" means that the debug info is within `data`, as opposed to being
     // in another file that `data` refers to.
-    fn build_file_info_direct(data: &[u8]) -> Result<FileInfo, FixErr> {
-        let object = Object::parse(&data).fix_err("parse")?;
-        let debug_session = object.debug_session().fix_err("read debug info from")?;
+    fn build_file_info_direct(data: &[u8]) -> Result<FileInfo> {
+        let object = Object::parse(&data)
+            .map_err(Fail::compat)
+            .context("parse")?;
+        let debug_session = object
+            .debug_session()
+            .map_err(Fail::compat)
+            .context("read debug info from")?;
         Ok(FileInfo::new(debug_session))
     }
 
-    fn build_file_info_pe(data: &[u8]) -> Result<FileInfo, FixErr> {
+    fn build_file_info_pe(data: &[u8]) -> Result<FileInfo> {
         // For PEs we get the debug info from a PDB file.
-        let pe_object = Object::parse(&data).fix_err("parse")?;
+        let pe_object = Object::parse(&data)
+            .map_err(Fail::compat)
+            .context("parse")?;
         let pe = match pe_object {
             Object::Pe(pe) => pe,
             _ => unreachable!(),
         };
-        let pdb_file_name = pe.debug_file_name().fix_err("find debug info file for")?;
-        let data = fs::read(pdb_file_name.to_string()).fix_err_with_note(
-            format!("read debug info file `{}` for", pdb_file_name),
-            "this is expected and harmless for all PDB files on opt automation runs",
-        )?;
+        let pdb_file_name = pe.debug_file_name().context("find debug info file for")?;
+        let data = fs::read(pdb_file_name.to_string())
+            .context("note: this is expected and harmless for all PDB files on opt automation runs")
+            .with_context(|| format!("read debug info file `{}` for", pdb_file_name))?;
         Fixer::build_file_info_direct(&data)
     }
 
-    fn build_file_info_macho(data: &[u8]) -> Result<FileInfo, FixErr> {
+    fn build_file_info_macho(data: &[u8]) -> Result<FileInfo> {
         // On Mac, debug info is typically stored in `.dSYM` directories. But
         // they aren't normally built for Firefox because doing so is slow.
         // Instead, we read the symbol table of the given file, which has
@@ -519,22 +476,22 @@ impl Fixer {
         let mut func_infos = vec![];
         let mut interner = Interner::default();
         for sym in macho.symbols() {
-            let (oso_name, nlist) = sym.fix_err("read symbol table from")?;
+            let (oso_name, nlist) = sym.context("read symbol table from")?;
             if nlist.is_stab() && nlist.n_type == mach::symbols::N_OSO {
                 if let Some(ar_file_name) = Fixer::is_within_archive(oso_name) {
                     // It's an archive entry, e.g. "libgkrust.a(foo.o)". Read
                     // every entry in archive, if we haven't already done so.
                     if seen_archives.insert(ar_file_name) {
                         let ar_data = fs::read(ar_file_name)
-                            .fix_err(format!("read ar `{}` referenced by", ar_file_name))?;
-                        let ar = archive::Archive::parse(&ar_data)
-                            .fix_err(format!("parse ar `{}` referenced by", ar_file_name))?;
+                            .with_context(|| format!("read ar `{}` referenced by", ar_file_name))?;
+                        let ar = archive::Archive::parse(&ar_data).with_context(|| {
+                            format!("parse ar `{}` referenced by", ar_file_name)
+                        })?;
 
                         for (name, _, _) in ar.summarize() {
-                            let data = ar.extract(name, &ar_data).fix_err(format!(
-                                "read an entry in ar `{}` referenced by",
-                                ar_file_name
-                            ))?;
+                            let data = ar.extract(name, &ar_data).with_context(|| {
+                                format!("read an entry in ar `{}` referenced by", ar_file_name)
+                            })?;
                             Fixer::do_macho_oso(
                                 &sym_func_addrs,
                                 ar_file_name,
@@ -546,10 +503,10 @@ impl Fixer {
                     }
                 } else {
                     // It's a normal object file. Read it.
-                    let data = fs::read(oso_name).fix_err_with_note(
-                        format!("read object file `{}` referenced by", oso_name),
-                        "this is expected and harmless for all Mac object files on opt automation runs",
-                    )?;
+                    let note = "note: this is expected and harmless for all Mac object files on opt automation runs";
+                    let data = fs::read(oso_name).context(note).with_context(|| {
+                        format!("read object file `{}` referenced by", oso_name)
+                    })?;
                     Fixer::do_macho_oso(
                         &sym_func_addrs,
                         oso_name,
@@ -564,8 +521,8 @@ impl Fixer {
         Ok(FileInfo::finish(interner, func_infos))
     }
 
-    fn macho(data: &[u8]) -> Result<mach::MachO, FixErr> {
-        let mach = mach::Mach::parse(&data).fix_err("parse (with goblin)")?;
+    fn macho(data: &[u8]) -> Result<mach::MachO> {
+        let mach = mach::Mach::parse(&data).context("parse (with goblin)")?;
         match mach {
             mach::Mach::Binary(macho) => Ok(macho),
             mach::Mach::Fat(multi_arch) => {
@@ -585,19 +542,19 @@ impl Fixer {
                 // between the "couldn't find the x86-64 code" case and the
                 // "found it, but it had an error" case.
                 let msg = "find x86-64 code in the fat binary";
-                macho.fix_err(msg)?.fix_err(msg)
+                macho.context(msg)?.context(msg)
             }
         }
     }
 
     /// Iterate through the symbol table, getting the address of every function
     /// in the file.
-    fn sym_func_addrs(macho: &mach::MachO) -> Result<SymFuncAddrs, FixErr> {
+    fn sym_func_addrs(macho: &mach::MachO) -> Result<SymFuncAddrs> {
         let object_load_address = Fixer::object_load_address(macho);
         let mut sym_func_addrs = FxHashMap::default();
         let mut curr_oso_name = String::new();
         for sym in macho.symbols() {
-            let (name, nlist) = sym.fix_err("read symbol table from")?;
+            let (name, nlist) = sym.context("read symbol table from")?;
             if !nlist.is_stab() {
                 continue;
             }
@@ -716,35 +673,37 @@ impl Fixer {
         data: &[u8],
         interner: &mut Interner,
         func_infos: &mut Vec<FuncInfo>,
-    ) -> Result<(), FixErr> {
+    ) -> Result<()> {
         // Although we use `goblin` to iterate through the symbol
         // table, we use `symbolic` to read the debug info from the
         // object/archive, because it's easier to use.
-        let archive =
-            Archive::parse(&data).fix_err(format!("parse `{}` referenced by", file_name))?;
+        let archive = Archive::parse(&data)
+            .map_err(Fail::compat)
+            .with_context(|| format!("parse `{}` referenced by", file_name))?;
 
         // Get the x86-64 object from the archive, which might be a fat binary.
         // (On Mac, Firefox is only available on x86-64.)
         let mut x86_64_object = None;
         for object in archive.objects() {
-            let object = object.fix_err(format!(
-                "parse fat binary entry in `{}` referenced by",
-                file_name
-            ))?;
+            let object = object.map_err(Fail::compat).with_context(|| {
+                format!("parse fat binary entry in `{}` referenced by", file_name)
+            })?;
             if object.arch() == Arch::Amd64 {
                 x86_64_object = Some(object);
                 break;
             }
         }
 
-        let object = x86_64_object.fix_err(format!(
-            "find x86-64 code in the fat binary `{}` referenced by",
-            file_name
-        ))?;
-        let debug_session = object.debug_session().fix_err(format!(
-            "read debug info from `{}` referenced by",
-            file_name
-        ))?;
+        let object = x86_64_object.with_context(|| {
+            format!(
+                "find x86-64 code in the fat binary `{}` referenced by",
+                file_name
+            )
+        })?;
+        let debug_session = object
+            .debug_session()
+            .map_err(Fail::compat)
+            .with_context(|| format!("read debug info from `{}` referenced by", file_name))?;
 
         FileInfo::add(
             &sym_func_addrs,
@@ -797,12 +756,13 @@ impl Fixer {
                         // - The line will still receive some transformation, using
                         //   the "no symbols or debug info" case below.
                         eprintln!(
-                            "fix-stacks error: failed to {} `{}`",
-                            err.op, raw_in_file_name
+                            "fix-stacks: error: failed to {} `{}`",
+                            err, raw_in_file_name
                         );
-                        if let Some(note) = err.note {
-                            eprintln!("fix-stacks note:  {}", note);
-                        }
+                        err.chain()
+                            .skip(1)
+                            .for_each(|cause| eprintln!("fix-stacks: {}", cause));
+
                         v.insert(FileInfo::default())
                     }
                 }
