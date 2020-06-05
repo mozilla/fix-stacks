@@ -276,7 +276,7 @@ impl Fixer {
     fn new(json_mode: JsonMode, bp_info: Option<BreakpadInfo>) -> Fixer {
         // We use parentheses with native debug info, and square brackets with
         // Breakpad symbols.
-        let (lb, rb) = if let None = bp_info {
+        let (lb, rb) = if bp_info.is_none() {
             ('(', ')')
         } else {
             ('[', ']')
@@ -408,7 +408,7 @@ impl Fixer {
 
         // - Unix: `sym_seg` is `libxul.so.sym`
         // - Windows: `sym_seg` is `xul.sym`
-        let mut sym_seg = bin_base.clone();
+        let mut sym_seg = bin_base;
         sym_seg.push_str(".sym");
 
         // - Unix: `sym_file` is `syms/libxul.so/<uuid>/libxul.so.sym`.
@@ -657,7 +657,7 @@ impl Fixer {
         }
 
         // Is there no fifth element?
-        if let Some(_) = iter.next() {
+        if iter.next().is_some() {
             return None;
         }
 
@@ -794,7 +794,7 @@ impl Fixer {
                 };
 
                 // Maybe strip some junk from Breakpad file names.
-                if let Some(_) = self.bp_info {
+                if self.bp_info.is_some() {
                     if let Some(stripped) = Fixer::strip_firefox_breakpad_junk(&out_file_name) {
                         out_file_name = stripped
                     }
