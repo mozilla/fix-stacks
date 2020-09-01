@@ -75,32 +75,28 @@ which avoids the need for more complex changes to that file.)
 
 ### Breakpad symbols
 
-`bpsyms/example-linux/` was produced on an Ubuntu 19.10 box by `dump_syms`
-(from a development build of Firefox), with these commands within `tests/`:
+`bpsyms/example-*/` was produced by `dump_syms` (from a build of
+https://github.com/mozilla/dump_syms), with these commands within `tests/`:
 ```
-# 123456781234567812345678123456789 is a fake UUID whose exact value doesn't
-# matter.
+# $DUMP_SYMS is the location of the dump_syms executable.
+$DUMP_SYMS example-linux > example-linux.sym
+# Replace 123456781234567812345678123456789 below with the UUID found on the
+# MODULE line in example-linux.sym.
 DIR="bpsyms/example-linux/123456781234567812345678123456789/"
 mkdir $DIR
-# $OBJDIR is the object directory of the Firefox build.
-$OBJDIR/dist/host/bin/dump_syms example-linux > $DIR/example-linux.sym
+mv example-linux.sym $DIR
+
+$DUMP_SYMS example-windows.pdb > example-windows.sym
+# Replace 123456781234567812345678123456789 below with the UUID found on the
+# MODULE line in example-windows.sym.
+DIR="bpsyms/example-windows/123456781234567812345678123456789/"
+mkdir $DIR
+mv example-windows.sym $DIR
 ```
 
 `example-linux.sym` was then edited to change the `FILE` line mentioning
 `example.c` to be prefixed with a Mercurial repository and suffixed with a
 revision ID, in order to test the removal of this Firefox Breakpad junk.
-
-`bpsyms/example-windows.pdb/` was produced on Windows 10 laptop by
-`dump_syms.exe`, with these commands within `tests/`:
-```
-# $SRCDIR is the source directory of a Firfox build.
-$SRCDIR/mach artifact toolchain --from-build win64-dump-syms
-# 123456781234567812345678123456789 is a fake UUID whose exact value doesn't
-# matter.
-DIR="bpsyms/example-windows.pdb/123456781234567812345678123456789/"
-mkdir $DIR
-dump_syms/dump_syms.exe example-windows.exe > $DIR/example-windows.sym
-```
 
 ## Obtaining the debug info
 

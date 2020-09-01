@@ -13,7 +13,6 @@ use std::env;
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::str;
 use symbolic_common::{Arch, Name};
 use symbolic_debuginfo::{Archive, FileFormat, Function, Object, ObjectDebugSession};
@@ -256,7 +255,6 @@ impl FileInfo {
 /// Info provided via the `-b` flag.
 struct BreakpadInfo {
     syms_dir: String,
-    fileid_exe: String,
 }
 
 /// The top level structure that does the work.
@@ -338,10 +336,7 @@ impl Fixer {
 
     fn build_file_info_breakpad(
         bin_file: &str,
-        BreakpadInfo {
-            syms_dir,
-            fileid_exe,
-        }: &BreakpadInfo,
+        BreakpadInfo { syms_dir }: &BreakpadInfo,
     ) -> Result<FileInfo> {
         // We must find the `.sym` file for this `bin_file`, as produced by the
         // Firefox build system, which is in the symbols directory under
@@ -381,26 +376,14 @@ impl Fixer {
         db_dir.push(&syms_dir);
         db_dir.push(&db_seg);
 
-        // - Unix: `db_entries` iterates over `syms/libxul.so/`
-        // - Windows: `db_entries` iterates over `syms/xul.pdb/`
-        let mut db_entries = fs::read_dir(&db_dir)
-            .context(
-                "note: this is expected and harmless for system libraries on debug automation runs",
-            )
-            .with_context(|| format!("read breakpad symbols dir `{}` for", db_dir.display()))?;
-
         // - Unix: `uuid_dir` is `syms/libxul.so/<uuid>/`
         // - Windows: `uuid_dir` is `syms/xul.pdb/<uuid>/`
-        let uuid_dir = if let (Some(d), None) = (db_entries.next(), db_entries.next()) {
-            d.with_context(|| format!("read breakpad symbols dir `{}` for", db_dir.display()))?
-                .path()
-        } else {
-            // Use `fileid` to determine the right directory.
-            let output = Command::new(fileid_exe)
-                .arg(&bin_file)
-                .output()
-                .with_context(|| format!("run `{}` for", fileid_exe))?;
-            let uuid_seg = str::from_utf8(&output.stdout).unwrap().trim_end();
+        let uuid_dir = {
+            let data = fs::read(bin_file).context("read")?;
+            let object = Object::parse(&data)
+                .map_err(Fail::compat)
+                .context("parse")?;
+            let uuid_seg = object.debug_id().breakpad().to_string();
             let mut uuid_dir = db_dir;
             uuid_dir.push(uuid_seg);
             uuid_dir
@@ -417,6 +400,9 @@ impl Fixer {
         sym_file.push(&sym_seg);
 
         let data = fs::read(&sym_file)
+            .context(
+                "note: this is expected and harmless for system libraries on debug automation runs",
+            )
             .with_context(|| format!("read symbols file `{}` for", sym_file.display()))?;
         Fixer::build_file_info_direct(&data)
     }
@@ -835,8 +821,7 @@ Post-process the stack frames produced by MozFormatCodeAddress().
 options:
   -h, --help              Show this message and exit
   -j, --json              Treat input and output as JSON fragments
-  -b, --breakpad DIR,EXE  Use breakpad symbols in directory DIR,
-                          and `fileid` EXE to choose among possibilities
+  -b, --breakpad DIR      Use breakpad symbols in directory DIR
 "##;
 
 fn main_inner() -> io::Result<()> {
@@ -857,15 +842,9 @@ fn main_inner() -> io::Result<()> {
         } else if arg == "-b" || arg == "--breakpad" {
             match args.next() {
                 Some(arg2) => {
-                    let v: Vec<_> = arg2.split(',').collect();
-                    if v.len() == 2 {
-                        bp_info = Some(BreakpadInfo {
-                            syms_dir: v[0].to_string(),
-                            fileid_exe: v[1].to_string(),
-                        });
-                    } else {
-                        return err(format!("bad argument `{}` to option `{}`.", arg2, arg));
-                    }
+                    bp_info = Some(BreakpadInfo {
+                        syms_dir: arg2.to_string(),
+                    });
                 }
                 _ => {
                     return err(format!("missing argument to option `{}`.", arg));
