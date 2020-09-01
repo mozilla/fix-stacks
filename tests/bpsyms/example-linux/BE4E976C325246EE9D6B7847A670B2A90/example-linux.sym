@@ -1,31 +1,6 @@
 MODULE Linux x86_64 BE4E976C325246EE9D6B7847A670B2A90 example-linux
 INFO CODE_ID 6C974EBE5232EE469D6B7847A670B2A956F8AEDE
 FILE 0 hg:hg.mozilla.org/integration/autoland:/home/njn/moz/fix-stacks/tests/example.c:94d31f914f29e72dd81a8880100d12f67e48a5b0
-FUNC 1130 28 0 main
-1130 f 24 0
-113f 7 25 0
-1146 9 26 0
-114f 3 27 0
-1152 6 27 0
-FUNC 1160 45 0 f
-1160 c 16 0
-116c 4 17 0
-1170 7 17 0
-1177 4 18 0
-117b 5 18 0
-1180 4 19 0
-1184 7 19 0
-118b 4 20 0
-118f 5 20 0
-1194 4 21 0
-1198 7 21 0
-119f 6 22 0
-FUNC 11b0 31 0 g
-11b0 c 11 0
-11bc 11 12 0
-11cd 4 13 0
-11d1 a 13 0
-11db 6 14 0
 PUBLIC 1000 0 _init
 PUBLIC 1040 0 _start
 PUBLIC 1070 0 _dl_relocate_static_pie
@@ -33,32 +8,50 @@ PUBLIC 1080 0 deregister_tm_clones
 PUBLIC 10b0 0 register_tm_clones
 PUBLIC 10f0 0 __do_global_dtors_aux
 PUBLIC 1120 0 frame_dummy
+FUNC 1130 28 0 main
+1130 f 24 0
+113f 7 25 0
+1146 9 26 0
+114f 9 27 0
+FUNC 1160 45 0 f
+1160 c 16 0
+116c b 17 0
+1177 9 18 0
+1180 b 19 0
+118b 9 20 0
+1194 b 21 0
+119f 6 22 0
+FUNC 11b0 31 0 g
+11b0 c 11 0
+11bc 11 12 0
+11cd e 13 0
+11db 6 14 0
 PUBLIC 11f0 0 __libc_csu_init
 PUBLIC 1250 0 __libc_csu_fini
 PUBLIC 1254 0 _fini
+STACK CFI INIT 1040 2b .cfa: $rsp 8 +
+STACK CFI INIT 1070 1 .cfa: $rsp 8 + .ra: .cfa -8 + ^
 STACK CFI INIT 1020 20 .cfa: $rsp 16 + .ra: .cfa -8 + ^
 STACK CFI 1026 .cfa: $rsp 24 +
-STACK CFI INIT 1040 2b .cfa: $rsp 8 + .ra: .cfa -8 + ^
-STACK CFI INIT 1070 1 .cfa: $rsp 8 + .ra: .cfa -8 + ^
 STACK CFI INIT 1130 28 .cfa: $rsp 8 + .ra: .cfa -8 + ^
-STACK CFI 1131 $rbp: .cfa -16 + ^ .cfa: $rsp 16 +
+STACK CFI 1131 .cfa: $rsp 16 + $rbp: .cfa -16 + ^
 STACK CFI 1134 .cfa: $rbp 16 +
 STACK CFI 1157 .cfa: $rsp 8 +
 STACK CFI INIT 1160 45 .cfa: $rsp 8 + .ra: .cfa -8 + ^
-STACK CFI 1161 $rbp: .cfa -16 + ^ .cfa: $rsp 16 +
+STACK CFI 1161 .cfa: $rsp 16 + $rbp: .cfa -16 + ^
 STACK CFI 1164 .cfa: $rbp 16 +
 STACK CFI 11a4 .cfa: $rsp 8 +
 STACK CFI INIT 11b0 31 .cfa: $rsp 8 + .ra: .cfa -8 + ^
-STACK CFI 11b1 $rbp: .cfa -16 + ^ .cfa: $rsp 16 +
+STACK CFI 11b1 .cfa: $rsp 16 + $rbp: .cfa -16 + ^
 STACK CFI 11b4 .cfa: $rbp 16 +
 STACK CFI 11e0 .cfa: $rsp 8 +
 STACK CFI INIT 11f0 5d .cfa: $rsp 8 + .ra: .cfa -8 + ^
-STACK CFI 11f2 $r15: .cfa -16 + ^ .cfa: $rsp 16 +
-STACK CFI 11f7 $r14: .cfa -24 + ^ .cfa: $rsp 24 +
-STACK CFI 11fc $r13: .cfa -32 + ^ .cfa: $rsp 32 +
-STACK CFI 1201 $r12: .cfa -40 + ^ .cfa: $rsp 40 +
-STACK CFI 1209 $rbp: .cfa -48 + ^ .cfa: $rsp 48 +
-STACK CFI 1211 $rbx: .cfa -56 + ^ .cfa: $rsp 56 +
+STACK CFI 11f2 .cfa: $rsp 16 + $r15: .cfa -16 + ^
+STACK CFI 11f7 .cfa: $rsp 24 + $r14: .cfa -24 + ^
+STACK CFI 11fc .cfa: $rsp 32 + $r13: .cfa -32 + ^
+STACK CFI 1201 .cfa: $rsp 40 + $r12: .cfa -40 + ^
+STACK CFI 1209 .cfa: $rsp 48 + $rbp: .cfa -48 + ^
+STACK CFI 1211 .cfa: $rsp 56 + $rbx: .cfa -56 + ^
 STACK CFI 1218 .cfa: $rsp 64 +
 STACK CFI 1242 .cfa: $rsp 56 +
 STACK CFI 1243 .cfa: $rsp 48 +

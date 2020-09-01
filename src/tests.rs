@@ -297,15 +297,10 @@ fn test_linux_breakpad() {
     // LINE 0x11cd line=13 file=/home/njn/moz/fix-stacks/tests/example.c
     // LINE 0x11d1 line=13 file=/home/njn/moz/fix-stacks/tests/example.c
     // LINE 0x11db line=14 file=/home/njn/moz/fix-stacks/tests/example.c
-
-    // We can use "" for `fileid_exe` because that field is only used for
-    // binaries with multiple Breakpad symbol dirs, which this test doesn't
-    // have.
     let mut fixer = Fixer::new(
         JsonMode::No,
         Some(BreakpadInfo {
             syms_dir: "tests/bpsyms".to_string(),
-            fileid_exe: "".to_string(),
         }),
     );
 
@@ -367,15 +362,10 @@ fn test_windows_breakpad() {
     // LINE 0x6c49 line=12 file=c:\Users\njn\moz\fix-stacks\tests\example.c
     // LINE 0x6c55 line=13 file=c:\Users\njn\moz\fix-stacks\tests\example.c
     // LINE 0x6c61 line=14 file=c:\Users\njn\moz\fix-stacks\tests\example.c
-
-    // We can use "" for `fileid_exe` because that field is only used for
-    // binaries with multiple Breakpad symbol dirs, which this test doesn't
-    // have.
     let mut fixer = Fixer::new(
         JsonMode::No,
         Some(BreakpadInfo {
             syms_dir: "tests/bpsyms".to_string(),
-            fileid_exe: "".to_string(),
         }),
     );
 
