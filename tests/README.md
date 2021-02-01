@@ -32,6 +32,11 @@ command within `tests/`:
 ```
 clang -g example.c -o example-linux
 ```
+`example-linux-fallback` was produced on a Gentoo box using GCC 9.3.0 with this
+command within `tests/`:
+```
+gcc -g example.c -o example-linux-fallback
+```
 
 ### Windows
 

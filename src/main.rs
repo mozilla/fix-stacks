@@ -315,7 +315,9 @@ impl Fixer {
     fn build_file_info(bin_file: &str, bp_info: &Option<BreakpadInfo>) -> Result<FileInfo> {
         // If we're using Breakpad symbols, we don't consult `bin_file`.
         if let Some(bp_info) = bp_info {
-            return Fixer::build_file_info_breakpad(bin_file, bp_info);
+            if let Ok(res) = Fixer::build_file_info_breakpad(bin_file, bp_info) {
+              return Ok(res);
+            }
         }
 
         // Otherwise, we read `bin_file`.
