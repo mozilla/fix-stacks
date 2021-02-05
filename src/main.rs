@@ -4,7 +4,6 @@
 // copied, modified, or distributed except according to those terms.
 
 use anyhow::{bail, Context, Result};
-use failure::Fail;
 use fxhash::{FxHashMap, FxHashSet};
 use goblin::{archive, mach};
 use regex::Regex;
@@ -14,9 +13,9 @@ use std::fs;
 use std::io::{self, BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::str;
-use symbolic_common::{Arch, Name};
+use symbolic_common::{Arch, Language, Name, NameMangling};
 use symbolic_debuginfo::{Archive, FileFormat, Function, Object, ObjectDebugSession};
-use symbolic_demangle::{Demangle, DemangleFormat, DemangleOptions};
+use symbolic_demangle::{Demangle, DemangleOptions};
 
 #[cfg(test)]
 mod tests;
@@ -137,11 +136,8 @@ impl FuncInfo {
     }
 
     fn demangled_name(&self) -> String {
-        let options = DemangleOptions {
-            format: DemangleFormat::Full,
-            with_arguments: true,
-        };
-        Name::new(self.mangled_name.as_str())
+        let options = DemangleOptions::complete();
+        Name::new(self.mangled_name.as_str(), NameMangling::Mangled, Language::Unknown)
             .try_demangle(options)
             .to_string()
     }
@@ -319,7 +315,9 @@ impl Fixer {
     fn build_file_info(bin_file: &str, bp_info: &Option<BreakpadInfo>) -> Result<FileInfo> {
         // If we're using Breakpad symbols, we don't consult `bin_file`.
         if let Some(bp_info) = bp_info {
-            return Fixer::build_file_info_breakpad(bin_file, bp_info);
+            if let Ok(res) = Fixer::build_file_info_breakpad(bin_file, bp_info) {
+              return Ok(res);
+            }
         }
 
         // Otherwise, we read `bin_file`.
@@ -381,7 +379,6 @@ impl Fixer {
         let uuid_dir = {
             let data = fs::read(bin_file).context("read")?;
             let object = Object::parse(&data)
-                .map_err(Fail::compat)
                 .context("parse")?;
             let uuid_seg = object.debug_id().breakpad().to_string();
             let mut uuid_dir = db_dir;
@@ -411,11 +408,9 @@ impl Fixer {
     // in another file that `data` refers to.
     fn build_file_info_direct(data: &[u8]) -> Result<FileInfo> {
         let object = Object::parse(&data)
-            .map_err(Fail::compat)
             .context("parse")?;
         let debug_session = object
             .debug_session()
-            .map_err(Fail::compat)
             .context("read debug info from")?;
         Ok(FileInfo::new(debug_session))
     }
@@ -423,7 +418,6 @@ impl Fixer {
     fn build_file_info_pe(data: &[u8]) -> Result<FileInfo> {
         // For PEs we get the debug info from a PDB file.
         let pe_object = Object::parse(&data)
-            .map_err(Fail::compat)
             .context("parse")?;
         let pe = match pe_object {
             Object::Pe(pe) => pe,
@@ -664,14 +658,13 @@ impl Fixer {
         // table, we use `symbolic` to read the debug info from the
         // object/archive, because it's easier to use.
         let archive = Archive::parse(&data)
-            .map_err(Fail::compat)
             .with_context(|| format!("parse `{}` referenced by", file_name))?;
 
         // Get the x86-64 object from the archive, which might be a fat binary.
         // (On Mac, Firefox is only available on x86-64.)
         let mut x86_64_object = None;
         for object in archive.objects() {
-            let object = object.map_err(Fail::compat).with_context(|| {
+            let object = object.with_context(|| {
                 format!("parse fat binary entry in `{}` referenced by", file_name)
             })?;
             if object.arch() == Arch::Amd64 {
@@ -688,7 +681,6 @@ impl Fixer {
         })?;
         let debug_session = object
             .debug_session()
-            .map_err(Fail::compat)
             .with_context(|| format!("read debug info from `{}` referenced by", file_name))?;
 
         FileInfo::add(

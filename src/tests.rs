@@ -337,6 +337,73 @@ fn test_linux_breakpad() {
 }
 
 #[test]
+fn test_linux_breakpad_fallback() {
+    // The breakpad symbols debug info within `bpsyms/` is missing in this
+    // test. This verifies that we fall back to using native debug information
+    // correctly in this scenario.
+    //
+    // The native debug info within `example-linux-fallback` is as follows. (See
+    // `tests/README.md` for details on how these lines were generated.)
+    //
+    // FUNC 11f8 size=67 func=main
+    // LINE 0x11f8 line=24 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x120f line=25 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x1216 line=26 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x1222 line=27 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x1225 line=28 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // FUNC 11a4 size=84 func=f
+    // LINE 0x11a4 line=16 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x11b0 line=17 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x11bf line=18 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x11cb line=19 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x11da line=20 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x11e6 line=21 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x11f5 line=22 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // FUNC 1175 size=47 func=g
+    // LINE 0x1175 line=11 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x1181 line=12 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x1192 line=13 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    // LINE 0x11a1 line=14 file=/home/gsvelto/projects/fix-stacks/tests/example.c
+    let mut fixer = Fixer::new(
+        JsonMode::No,
+        Some(BreakpadInfo {
+            syms_dir: "tests/bpsyms".to_string(),
+        }),
+    );
+
+    // Test various addresses.
+    let mut func = |name, addr, linenum| {
+        let line = format!("#00: ???[tests/example-linux-fallback +0x{:x}]", addr);
+        let line = fixer.fix(line);
+        assert_eq!(
+            line,
+            format!(
+                "#00: {} [/home/gsvelto/projects/fix-stacks/tests/example.c:{}]",
+                name, linenum
+            )
+        );
+    };
+    func("main", 0x11f8, 24);
+    func("main", 0x120f, 25);
+    func("main", 0x1216, 26);
+    func("main", 0x1222, 27);
+    func("f", 0x11a4, 16);
+    func("f", 0x11cb, 19);
+    func("g", 0x1181, 12);
+    func("g", 0x11a1, 14);
+
+    // Test various addresses outside `main`, `f`, and `g`.
+    let mut outside = |addr| {
+        let line = format!("#00: ???[tests/example-linux-fallback +0x{:x}]", addr);
+        let line_actual = fixer.fix(line);
+        let line_expected = format!("#00: ??? [tests/example-linux-fallback + 0x{:x}]", addr);
+        assert_eq!(line_expected, line_actual);
+    };
+    outside(0x0); // A very low address.
+    outside(0xfffffff); // A very high address.
+}
+
+#[test]
 fn test_windows_breakpad() {
     // The breakpad symbols debug info within `bpsyms/example-windows.pdb/` is
     // as follows. (See `tests/README.md` for details on how these lines were
