@@ -253,6 +253,46 @@ struct BreakpadInfo {
     syms_dir: String,
 }
 
+trait CpuArch {
+    fn cpuarch(&self) -> Arch;
+}
+
+impl CpuArch for mach::header::Header {
+    fn cpuarch(&self) -> Arch {
+        // Copied from symbolic_debug::macho::MachObject::arch.
+        use mach::constants::cputype;
+
+        match (self.cputype(), self.cpusubtype()) {
+            (cputype::CPU_TYPE_I386, cputype::CPU_SUBTYPE_I386_ALL) => Arch::X86,
+            (cputype::CPU_TYPE_I386, _) => Arch::X86Unknown,
+            (cputype::CPU_TYPE_X86_64, cputype::CPU_SUBTYPE_X86_64_ALL) => Arch::Amd64,
+            (cputype::CPU_TYPE_X86_64, cputype::CPU_SUBTYPE_X86_64_H) => Arch::Amd64h,
+            (cputype::CPU_TYPE_X86_64, _) => Arch::Amd64Unknown,
+            (cputype::CPU_TYPE_ARM64, cputype::CPU_SUBTYPE_ARM64_ALL) => Arch::Arm64,
+            (cputype::CPU_TYPE_ARM64, cputype::CPU_SUBTYPE_ARM64_V8) => Arch::Arm64V8,
+            (cputype::CPU_TYPE_ARM64, cputype::CPU_SUBTYPE_ARM64_E) => Arch::Arm64e,
+            (cputype::CPU_TYPE_ARM64, _) => Arch::Arm64Unknown,
+            (cputype::CPU_TYPE_ARM64_32, cputype::CPU_SUBTYPE_ARM64_32_ALL) => Arch::Arm64_32,
+            (cputype::CPU_TYPE_ARM64_32, cputype::CPU_SUBTYPE_ARM64_32_V8) => Arch::Arm64_32V8,
+            (cputype::CPU_TYPE_ARM64_32, _) => Arch::Arm64_32Unknown,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_ALL) => Arch::Arm,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V5TEJ) => Arch::ArmV5,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V6) => Arch::ArmV6,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V6M) => Arch::ArmV6m,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V7) => Arch::ArmV7,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V7F) => Arch::ArmV7f,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V7S) => Arch::ArmV7s,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V7K) => Arch::ArmV7k,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V7M) => Arch::ArmV7m,
+            (cputype::CPU_TYPE_ARM, cputype::CPU_SUBTYPE_ARM_V7EM) => Arch::ArmV7em,
+            (cputype::CPU_TYPE_ARM, _) => Arch::ArmUnknown,
+            (cputype::CPU_TYPE_POWERPC, cputype::CPU_SUBTYPE_POWERPC_ALL) => Arch::Ppc,
+            (cputype::CPU_TYPE_POWERPC64, cputype::CPU_SUBTYPE_POWERPC_ALL) => Arch::Ppc64,
+            (_, _) => Arch::Unknown,
+        }
+    }
+}
+
 /// The top level structure that does the work.
 struct Fixer {
     re: Regex,
@@ -447,6 +487,7 @@ impl Fixer {
         // robust in the face of errors if necessary.
 
         let macho = Fixer::macho(&data)?;
+        let arch = macho.header.cpuarch();
         let sym_func_addrs = Fixer::sym_func_addrs(&macho)?;
 
         // Iterate again through the symbol table, reading every object file
@@ -478,6 +519,7 @@ impl Fixer {
                                 data,
                                 &mut interner,
                                 &mut func_infos,
+                                arch,
                             )?;
                         }
                     }
@@ -493,6 +535,7 @@ impl Fixer {
                         &data,
                         &mut interner,
                         &mut func_infos,
+                        arch,
                     )?;
                 }
             }
@@ -506,11 +549,22 @@ impl Fixer {
         match mach {
             mach::Mach::Binary(macho) => Ok(macho),
             mach::Mach::Fat(multi_arch) => {
-                // Get the x86-64 object from the fat binary. (On Mac, Firefox
-                // is only available on x86-64.)
+                // There is no way to know which side of the fat binary is refered by a
+                // stack frame line, so take our best guess, which is whichever target
+                // fix-stacks itself was compiled for.
+                const CPU_TYPE: mach::cputype::CpuType = if cfg!(target_arch = "x86_64") {
+                    mach::constants::cputype::CPU_TYPE_X86_64
+                } else if cfg!(target_arch = "x86") {
+                    mach::constants::cputype::CPU_TYPE_X86
+                } else if cfg!(target_arch = "aarch64") {
+                    mach::constants::cputype::CPU_TYPE_ARM64
+                } else {
+                    // The fallback is meant to match no CPU type.
+                    mach::constants::cputype::CPU_TYPE_ANY
+                };
                 let macho = multi_arch.into_iter().find(|macho| {
                     if let Ok(macho) = macho {
-                        if macho.header.cputype() == mach::constants::cputype::CPU_TYPE_X86_64 {
+                        if macho.header.cputype() == CPU_TYPE {
                             return true;
                         }
                     }
@@ -519,9 +573,18 @@ impl Fixer {
 
                 // This chaining is necessary because `MachOIterator::Item` is
                 // not `MachO` but `Result<MachO>`. We don't distinguish
-                // between the "couldn't find the x86-64 code" case and the
+                // between the "couldn't find the $target_arch code" case and the
                 // "found it, but it had an error" case.
-                let msg = "find x86-64 code in the fat binary";
+                #[cfg(target_arch = "x86_64")]
+                let msg = if cfg!(target_arch = "x86_64") {
+                    "find x86_64 code in the fat binary"
+                } else if cfg!(target_arch = "x86") {
+                    "find x86 code in the fat binary"
+                } else if cfg!(target_arch = "aarch64") {
+                    "find arm64 code in the fat binary"
+                } else {
+                    "decide what code to use in the fat binary"
+                };
                 macho.context(msg)?.context(msg)
             }
         }
@@ -653,6 +716,7 @@ impl Fixer {
         data: &[u8],
         interner: &mut Interner,
         func_infos: &mut Vec<FuncInfo>,
+        arch: Arch,
     ) -> Result<()> {
         // Although we use `goblin` to iterate through the symbol
         // table, we use `symbolic` to read the debug info from the
@@ -660,23 +724,22 @@ impl Fixer {
         let archive = Archive::parse(&data)
             .with_context(|| format!("parse `{}` referenced by", file_name))?;
 
-        // Get the x86-64 object from the archive, which might be a fat binary.
-        // (On Mac, Firefox is only available on x86-64.)
-        let mut x86_64_object = None;
+        // Get the object of the wanted arch from the archive, which might be a fat binary.
+        let mut the_object = None;
         for object in archive.objects() {
             let object = object.with_context(|| {
                 format!("parse fat binary entry in `{}` referenced by", file_name)
             })?;
-            if object.arch() == Arch::Amd64 {
-                x86_64_object = Some(object);
+            if object.arch() == arch {
+                the_object = Some(object);
                 break;
             }
         }
 
-        let object = x86_64_object.with_context(|| {
+        let object = the_object.with_context(|| {
             format!(
-                "find x86-64 code in the fat binary `{}` referenced by",
-                file_name
+                "find {} code in the fat binary `{}` referenced by",
+                arch, file_name
             )
         })?;
         let debug_session = object
