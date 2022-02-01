@@ -575,7 +575,6 @@ impl Fixer {
                 // not `MachO` but `Result<MachO>`. We don't distinguish
                 // between the "couldn't find the $target_arch code" case and the
                 // "found it, but it had an error" case.
-                #[cfg(target_arch = "x86_64")]
                 let msg = if cfg!(target_arch = "x86_64") {
                     "find x86_64 code in the fat binary"
                 } else if cfg!(target_arch = "x86") {
