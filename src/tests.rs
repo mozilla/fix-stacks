@@ -126,21 +126,21 @@ fn test_windows() {
             )
         );
     };
-    func("main", 0x6bc0, 24);
-    func("main", 0x6bc1, 24);
-    func("main", 0x6bc2, 24);
-    func("main", 0x6bc7, 24);
-    func("main", 0x6bc9, 24);
-    func("main", 0x6bca, 24);
-    func("main", 0x6bcb, 24);
-    func("main", 0x6bcf, 25);
-    func("main", 0x6bd6, 26);
-    func("main", 0x6bdd, 26);
-    func("main", 0x6be6, 27);
-    func("f", 0x6bf4, 16);
-    func("f", 0x6c0f, 19);
-    func("g", 0x6c49, 12);
-    func("g", 0x6c63, 14);
+    func("main()", 0x6bc0, 24);
+    func("main()", 0x6bc1, 24);
+    func("main()", 0x6bc2, 24);
+    func("main()", 0x6bc7, 24);
+    func("main()", 0x6bc9, 24);
+    func("main()", 0x6bca, 24);
+    func("main()", 0x6bcb, 24);
+    func("main()", 0x6bcf, 25);
+    func("main()", 0x6bd6, 26);
+    func("main()", 0x6bdd, 26);
+    func("main()", 0x6be6, 27);
+    func("f(int*)", 0x6bf4, 16);
+    func("f(int*)", 0x6c0f, 19);
+    func("g(int*)", 0x6c49, 12);
+    func("g(int*)", 0x6c63, 14);
 
     // Try a new Fixer, without JSON mode.
     fixer = Fixer::new(JsonMode::No, None);
