@@ -161,6 +161,7 @@ fn test_windows() {
 }
 
 #[test]
+#[ignore] // https://github.com/mozilla/fix-stacks/issues/45
 fn test_mac() {
     // The native debug info within `mac-multi` is as follows. (See
     // `tests/README.md` for details on how these lines were generated.)
