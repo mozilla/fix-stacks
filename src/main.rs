@@ -447,7 +447,7 @@ impl Fixer {
     // "Direct" means that the debug info is within `data`, as opposed to being
     // in another file that `data` refers to.
     fn build_file_info_direct(data: &[u8]) -> Result<FileInfo> {
-        let object = Object::parse(&data)
+        let object = Object::parse(data)
             .context("parse")?;
         let debug_session = object
             .debug_session()
@@ -457,7 +457,7 @@ impl Fixer {
 
     fn build_file_info_pe(data: &[u8]) -> Result<FileInfo> {
         // For PEs we get the debug info from a PDB file.
-        let pe_object = Object::parse(&data)
+        let pe_object = Object::parse(data)
             .context("parse")?;
         let pe = match pe_object {
             Object::Pe(pe) => pe,
@@ -486,7 +486,7 @@ impl Fixer {
         // We stop if any errors are encountered. The code could be made more
         // robust in the face of errors if necessary.
 
-        let macho = Fixer::macho(&data)?;
+        let macho = Fixer::macho(data)?;
         let arch = macho.header.cpuarch();
         let sym_func_addrs = Fixer::sym_func_addrs(&macho)?;
 
@@ -545,7 +545,7 @@ impl Fixer {
     }
 
     fn macho(data: &[u8]) -> Result<mach::MachO> {
-        let mach = mach::Mach::parse(&data).context("parse (with goblin)")?;
+        let mach = mach::Mach::parse(data).context("parse (with goblin)")?;
         match mach {
             mach::Mach::Binary(macho) => Ok(macho),
             mach::Mach::Fat(multi_arch) => {
@@ -720,7 +720,7 @@ impl Fixer {
         // Although we use `goblin` to iterate through the symbol
         // table, we use `symbolic` to read the debug info from the
         // object/archive, because it's easier to use.
-        let archive = Archive::parse(&data)
+        let archive = Archive::parse(data)
             .with_context(|| format!("parse `{}` referenced by", file_name))?;
 
         // Get the object of the wanted arch from the archive, which might be a fat binary.
@@ -746,7 +746,7 @@ impl Fixer {
             .with_context(|| format!("read debug info from `{}` referenced by", file_name))?;
 
         FileInfo::add(
-            &sym_func_addrs,
+            sym_func_addrs,
             file_name,
             debug_session,
             interner,
@@ -827,7 +827,7 @@ impl Fixer {
                 let raw_out_file_name = file_info.interner.get(line_info.path);
                 let out_file_name_str;
                 let mut out_file_name = if let JsonMode::Yes = self.json_mode {
-                    out_file_name_str = Fixer::json_escape(&raw_out_file_name);
+                    out_file_name_str = Fixer::json_escape(raw_out_file_name);
                     &out_file_name_str
                 } else {
                     raw_out_file_name
@@ -835,7 +835,7 @@ impl Fixer {
 
                 // Maybe strip some junk from Breakpad file names.
                 if self.bp_info.is_some() {
-                    if let Some(stripped) = Fixer::strip_firefox_breakpad_junk(&out_file_name) {
+                    if let Some(stripped) = Fixer::strip_firefox_breakpad_junk(out_file_name) {
                         out_file_name = stripped
                     }
                 };
