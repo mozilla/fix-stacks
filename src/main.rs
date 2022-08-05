@@ -137,9 +137,13 @@ impl FuncInfo {
 
     fn demangled_name(&self) -> String {
         let options = DemangleOptions::complete();
-        Name::new(self.mangled_name.as_str(), NameMangling::Mangled, Language::Unknown)
-            .try_demangle(options)
-            .to_string()
+        Name::new(
+            self.mangled_name.as_str(),
+            NameMangling::Mangled,
+            Language::Unknown,
+        )
+        .try_demangle(options)
+        .to_string()
     }
 
     fn contains(&self, address: u64) -> bool {
@@ -356,7 +360,7 @@ impl Fixer {
         // If we're using Breakpad symbols, we don't consult `bin_file`.
         if let Some(bp_info) = bp_info {
             if let Ok(res) = Fixer::build_file_info_breakpad(bin_file, bp_info) {
-              return Ok(res);
+                return Ok(res);
             }
         }
 
@@ -418,8 +422,7 @@ impl Fixer {
         // - Windows: `uuid_dir` is `syms/xul.pdb/<uuid>/`
         let uuid_dir = {
             let data = fs::read(bin_file).context("read")?;
-            let object = Object::parse(&data)
-                .context("parse")?;
+            let object = Object::parse(&data).context("parse")?;
             let uuid_seg = object.debug_id().breakpad().to_string();
             let mut uuid_dir = db_dir;
             uuid_dir.push(uuid_seg);
@@ -447,18 +450,14 @@ impl Fixer {
     // "Direct" means that the debug info is within `data`, as opposed to being
     // in another file that `data` refers to.
     fn build_file_info_direct(data: &[u8]) -> Result<FileInfo> {
-        let object = Object::parse(data)
-            .context("parse")?;
-        let debug_session = object
-            .debug_session()
-            .context("read debug info from")?;
+        let object = Object::parse(data).context("parse")?;
+        let debug_session = object.debug_session().context("read debug info from")?;
         Ok(FileInfo::new(debug_session))
     }
 
     fn build_file_info_pe(data: &[u8]) -> Result<FileInfo> {
         // For PEs we get the debug info from a PDB file.
-        let pe_object = Object::parse(data)
-            .context("parse")?;
+        let pe_object = Object::parse(data).context("parse")?;
         let pe = match pe_object {
             Object::Pe(pe) => pe,
             _ => unreachable!(),
@@ -720,8 +719,8 @@ impl Fixer {
         // Although we use `goblin` to iterate through the symbol
         // table, we use `symbolic` to read the debug info from the
         // object/archive, because it's easier to use.
-        let archive = Archive::parse(data)
-            .with_context(|| format!("parse `{}` referenced by", file_name))?;
+        let archive =
+            Archive::parse(data).with_context(|| format!("parse `{}` referenced by", file_name))?;
 
         // Get the object of the wanted arch from the archive, which might be a fat binary.
         let mut the_object = None;
