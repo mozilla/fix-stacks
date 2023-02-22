@@ -39,3 +39,14 @@ were used.
 
 On Linux, use with debuginfo sections in separate files is untested and
 probably does not work.
+
+# Android notes
+
+Since the file path in `logcat`'s output isn't in locale workstation, This tool
+cannot convert the address to function name without options. To parse
+`logcat`'s output, you have to set `--local` option like the following. This
+option can remap remote file path with your built binaries.
+
+```shell
+adb logcat | fix-stacks --local objdir/dist/bin
+```
