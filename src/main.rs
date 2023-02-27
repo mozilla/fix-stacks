@@ -425,7 +425,7 @@ impl Fixer {
         // - Unix: `db_dir` is `syms/libxul.so/`
         // - Windows: `db_dir` is `syms/xul.pdb/`
         let mut db_dir = PathBuf::new();
-        db_dir.push(&syms_dir);
+        db_dir.push(syms_dir);
         db_dir.push(&db_seg);
 
         // - Unix: `uuid_dir` is `syms/libxul.so/<uuid>/`
@@ -771,7 +771,7 @@ impl Fixer {
         if let Some(local_info) = &self.local_info {
             if let Some(file_name) = Path::new(in_file_name).file_name() {
                 if let Some(new_path) = Path::new(&local_info.local_dir).join(file_name).to_str() {
-                    if fs::metadata(&new_path).is_ok() {
+                    if fs::metadata(new_path).is_ok() {
                         return Some(new_path.to_string());
                     }
                 }
