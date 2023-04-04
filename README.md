@@ -42,10 +42,12 @@ probably does not work.
 
 # Android notes
 
-Since the file path in `logcat`'s output isn't in locale workstation, This tool
-cannot convert the address to function name without options. To parse
-`logcat`'s output, you have to set `--local` option like the following. This
-option can remap remote file path with your built binaries.
+In order to fix stacks in `logcat` output from an Android device, you need to
+tell `fix-stacks` how to map the remote file paths to files on the host machine,
+using the `--local` option.
+
+The following command will check the file `objdir/dist/bin/<fileName>`
+on the host machine for any files which can't be found at the original path.
 
 ```shell
 adb logcat | fix-stacks --local objdir/dist/bin
