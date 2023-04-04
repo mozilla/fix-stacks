@@ -39,3 +39,16 @@ were used.
 
 On Linux, use with debuginfo sections in separate files is untested and
 probably does not work.
+
+# Android notes
+
+In order to fix stacks in `logcat` output from an Android device, you need to
+tell `fix-stacks` how to map the remote file paths to files on the host machine,
+using the `--local` option.
+
+The following command will check the file `objdir/dist/bin/<fileName>`
+on the host machine for any files which can't be found at the original path.
+
+```shell
+adb logcat | fix-stacks --local objdir/dist/bin
+```

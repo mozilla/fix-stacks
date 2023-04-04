@@ -257,6 +257,10 @@ struct BreakpadInfo {
     syms_dir: String,
 }
 
+struct LocalFileInfo {
+    local_dir: String,
+}
+
 trait CpuArch {
     fn cpuarch(&self) -> Arch;
 }
@@ -303,6 +307,7 @@ struct Fixer {
     file_infos: FxHashMap<String, FileInfo>,
     json_mode: JsonMode,
     bp_info: Option<BreakpadInfo>,
+    local_info: Option<LocalFileInfo>,
     lb: char,
     rb: char,
 }
@@ -311,7 +316,11 @@ struct Fixer {
 type SymFuncAddrs = FxHashMap<String, u64>;
 
 impl Fixer {
-    fn new(json_mode: JsonMode, bp_info: Option<BreakpadInfo>) -> Fixer {
+    fn new(
+        json_mode: JsonMode,
+        bp_info: Option<BreakpadInfo>,
+        local_info: Option<LocalFileInfo>,
+    ) -> Fixer {
         // We use parentheses with native debug info, and square brackets with
         // Breakpad symbols.
         let (lb, rb) = if bp_info.is_none() {
@@ -325,6 +334,7 @@ impl Fixer {
             file_infos: FxHashMap::default(),
             json_mode,
             bp_info,
+            local_info,
             lb,
             rb,
         }
@@ -415,7 +425,7 @@ impl Fixer {
         // - Unix: `db_dir` is `syms/libxul.so/`
         // - Windows: `db_dir` is `syms/xul.pdb/`
         let mut db_dir = PathBuf::new();
-        db_dir.push(&syms_dir);
+        db_dir.push(syms_dir);
         db_dir.push(&db_seg);
 
         // - Unix: `uuid_dir` is `syms/libxul.so/<uuid>/`
@@ -755,6 +765,21 @@ impl Fixer {
         Ok(())
     }
 
+    /// Remap the path with local options' path.
+    #[inline]
+    fn remap(&self, in_file_name: &str) -> Option<String> {
+        if let Some(local_info) = &self.local_info {
+            if let Some(file_name) = Path::new(in_file_name).file_name() {
+                if let Some(new_path) = Path::new(&local_info.local_dir).join(file_name).to_str() {
+                    if fs::metadata(new_path).is_ok() {
+                        return Some(new_path.to_string());
+                    }
+                }
+            }
+        }
+        None
+    }
+
     /// Fix stack frames within `line` as necessary. Prints any errors to stderr.
     #[inline]
     fn fix(&mut self, line: String) -> String {
@@ -775,7 +800,12 @@ impl Fixer {
         // lookups, error messages, etc.
         let raw_in_file_name = if let JsonMode::Yes = self.json_mode {
             Fixer::json_unescape(in_file_name)
+        } else if fs::metadata(in_file_name).is_ok() {
+            in_file_name.to_string()
+        } else if let Some(new_path) = self.remap(in_file_name) {
+            new_path
         } else {
+            // File is not found, but use original path.
             in_file_name.to_string()
         };
 
@@ -875,6 +905,8 @@ options:
   -h, --help              Show this message and exit
   -j, --json              Treat input and output as JSON fragments
   -b, --breakpad DIR      Use breakpad symbols in directory DIR
+  -l, --local DIR         Remap binary with same file name in DIR if the file
+                          is not found
 "##;
 
 fn main_inner() -> io::Result<()> {
@@ -882,6 +914,7 @@ fn main_inner() -> io::Result<()> {
     // that using an external crate doesn't seem worthwhile.
     let mut json_mode = JsonMode::No;
     let mut bp_info = None;
+    let mut local_info = None;
 
     let err = |msg| Err(io::Error::new(io::ErrorKind::Other, msg));
 
@@ -903,6 +936,17 @@ fn main_inner() -> io::Result<()> {
                     return err(format!("missing argument to option `{}`.", arg));
                 }
             }
+        } else if arg == "-l" || arg == "--local" {
+            match args.next() {
+                Some(arg2) => {
+                    local_info = Some(LocalFileInfo {
+                        local_dir: arg2.to_string(),
+                    });
+                }
+                _ => {
+                    return err(format!("missing argument to option `{}`.", arg));
+                }
+            }
         } else {
             let msg = format!(
                 "bad argument `{}`. Run `fix-stacks -h` for more information.",
@@ -914,7 +958,7 @@ fn main_inner() -> io::Result<()> {
 
     let reader = io::BufReader::new(io::stdin());
 
-    let mut fixer = Fixer::new(json_mode, bp_info);
+    let mut fixer = Fixer::new(json_mode, bp_info, local_info);
     for line in reader.lines() {
         writeln!(io::stdout(), "{}", fixer.fix(line.unwrap()))?;
     }
