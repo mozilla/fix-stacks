@@ -553,7 +553,7 @@ impl Fixer {
         Ok(FileInfo::finish(interner, func_infos))
     }
 
-    fn macho(data: &[u8]) -> Result<mach::MachO> {
+    fn macho(data: &[u8]) -> Result<mach::MachO<'_>> {
         let mach = mach::Mach::parse(data).context("parse (with goblin)")?;
         match mach {
             mach::Mach::Binary(macho) => Ok(macho),
@@ -571,13 +571,9 @@ impl Fixer {
                     // The fallback is meant to match no CPU type.
                     mach::constants::cputype::CPU_TYPE_ANY
                 };
-                let macho = multi_arch.into_iter().find(|macho| {
-                    if let Ok(macho) = macho {
-                        if macho.header.cputype() == CPU_TYPE {
-                            return true;
-                        }
-                    }
-                    false
+                let macho = multi_arch.into_iter().find(|macho| match macho {
+                    Ok(mach::SingleArch::MachO(macho)) => macho.header.cputype() == CPU_TYPE,
+                    _ => false,
                 });
 
                 // This chaining is necessary because `MachOIterator::Item` is
@@ -593,7 +589,11 @@ impl Fixer {
                 } else {
                     "decide what code to use in the fat binary"
                 };
-                macho.context(msg)?.context(msg)
+                match macho.context(msg)? {
+                    Ok(mach::SingleArch::MachO(macho)) => Ok(macho),
+                    Err(err) => Err(err.into()),
+                    _ => unreachable!(),
+                }
             }
         }
     }
