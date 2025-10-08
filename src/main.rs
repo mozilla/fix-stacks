@@ -916,7 +916,7 @@ fn main_inner() -> io::Result<()> {
     let mut bp_info = None;
     let mut local_info = None;
 
-    let err = |msg| Err(io::Error::new(io::ErrorKind::Other, msg));
+    let err = |msg| Err(io::Error::other(msg));
 
     let mut args = env::args().skip(1);
     while let Some(arg) = args.next() {
