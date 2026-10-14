@@ -6,14 +6,10 @@ edition = "2024"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-anyhow = "1.0.32" # Keep this in sync with what symbolic-debuginfo is using.
-fxhash = "0.2.1"
-goblin = "0.8.0" # Keep this in sync with what symbolic-debuginfo is using.
 regex = "1.5.5"
 serde_json = "1.0"
-symbolic-common = "12.16.0"
-symbolic-debuginfo = "12.16.0"
-symbolic-demangle = "12.16.0"
+tokio = { version = "1", features = ["full"] }
+wholesym = "0.8"
 
 [profile.release]
 lto = true
