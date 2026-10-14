@@ -3,7 +3,7 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use fxhash::{FxHashMap, FxHashSet};
 use goblin::{archive, mach};
 use regex::Regex;
