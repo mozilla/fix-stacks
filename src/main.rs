@@ -368,11 +368,10 @@ impl Fixer {
     /// error.
     fn build_file_info(bin_file: &str, bp_info: &Option<BreakpadInfo>) -> Result<FileInfo> {
         // If we're using Breakpad symbols, we don't consult `bin_file`.
-        if let Some(bp_info) = bp_info {
-            if let Ok(res) = Fixer::build_file_info_breakpad(bin_file, bp_info) {
+        if let Some(bp_info) = bp_info
+            && let Ok(res) = Fixer::build_file_info_breakpad(bin_file, bp_info) {
                 return Ok(res);
             }
-        }
 
         // Otherwise, we read `bin_file`.
         let data = fs::read(bin_file).context("read")?;
@@ -649,11 +648,10 @@ impl Fixer {
     // use `goblin` rather than `symbolic_debuginfo` for Mach-O binaries.
     fn object_load_address(macho: &mach::MachO) -> u64 {
         for seg in macho.segments.iter() {
-            if let Ok(name) = seg.name() {
-                if name == "__TEXT" {
+            if let Ok(name) = seg.name()
+                && name == "__TEXT" {
                     return seg.vmaddr;
                 }
-            }
         }
         0
     }
@@ -768,15 +766,12 @@ impl Fixer {
     /// Remap the path with local options' path.
     #[inline]
     fn remap(&self, in_file_name: &str) -> Option<String> {
-        if let Some(local_info) = &self.local_info {
-            if let Some(file_name) = Path::new(in_file_name).file_name() {
-                if let Some(new_path) = Path::new(&local_info.local_dir).join(file_name).to_str() {
-                    if fs::metadata(new_path).is_ok() {
+        if let Some(local_info) = &self.local_info
+            && let Some(file_name) = Path::new(in_file_name).file_name()
+                && let Some(new_path) = Path::new(&local_info.local_dir).join(file_name).to_str()
+                    && fs::metadata(new_path).is_ok() {
                         return Some(new_path.to_string());
                     }
-                }
-            }
-        }
         None
     }
 
@@ -863,11 +858,10 @@ impl Fixer {
                 };
 
                 // Maybe strip some junk from Breakpad file names.
-                if self.bp_info.is_some() {
-                    if let Some(stripped) = Fixer::strip_firefox_breakpad_junk(out_file_name) {
+                if self.bp_info.is_some()
+                    && let Some(stripped) = Fixer::strip_firefox_breakpad_junk(out_file_name) {
                         out_file_name = stripped
-                    }
-                };
+                    };
 
                 format!(
                     "{}{} {}{}:{}{}{}",
@@ -968,10 +962,9 @@ fn main_inner() -> io::Result<()> {
 
 fn main() {
     // Ignore broken pipes, e.g. when piping output through `head -10`.
-    if let Err(err) = main_inner() {
-        if err.kind() != io::ErrorKind::BrokenPipe {
+    if let Err(err) = main_inner()
+        && err.kind() != io::ErrorKind::BrokenPipe {
             eprintln!("fix-stacks: {}", err);
             std::process::exit(1);
         }
-    }
 }
