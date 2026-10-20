@@ -5,8 +5,8 @@
 
 use crate::*;
 
-#[test]
-fn test_linux() {
+#[tokio::test]
+async fn test_linux() {
     // The native debug info within `example-linux` is as follows. (See
     // `tests/README.md` for details on how these lines were generated.)
     //
@@ -34,9 +34,9 @@ fn test_linux() {
     let mut fixer = Fixer::new(JsonMode::No, None, None);
 
     // Test various addresses.
-    let mut func = |name, addr, linenum| {
+    let mut func = async |name, addr, linenum| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
-        let line = fixer.fix(line);
+        let line = fixer.fix(line).await;
         assert_eq!(
             line,
             format!(
@@ -45,41 +45,40 @@ fn test_linux() {
             )
         );
     };
-    func("main", 0x1130, 24);
-    func("main", 0x1131, 24);
-    func("main", 0x1132, 24);
-    func("main", 0x1137, 24);
-    func("main", 0x113a, 24);
-    func("main", 0x113d, 24);
-    func("main", 0x113e, 24);
-    func("main", 0x113f, 25);
-    func("main", 0x1146, 26);
-    func("main", 0x114e, 26);
-    func("main", 0x1157, 27);
-    func("f", 0x1160, 16);
-    func("f", 0x1180, 19);
-    func("g", 0x11bc, 12);
-    func("g", 0x11de, 14);
+    func("main", 0x1130, 24).await;
+    func("main", 0x1131, 24).await;
+    func("main", 0x1132, 24).await;
+    func("main", 0x1137, 24).await;
+    func("main", 0x113a, 24).await;
+    func("main", 0x113d, 24).await;
+    func("main", 0x113e, 24).await;
+    func("main", 0x113f, 25).await;
+    func("main", 0x1146, 26).await;
+    func("main", 0x114e, 26).await;
+    func("main", 0x1157, 27).await;
+    func("f", 0x1160, 16).await;
+    func("f", 0x1180, 19).await;
+    func("g", 0x11bc, 12).await;
+    func("g", 0x11de, 14).await;
 
     // Try a new Fixer.
     fixer = Fixer::new(JsonMode::No, None, None);
 
     // Test various addresses outside `main`, `f`, and `g`.
-    let mut outside = |addr| {
+    let mut outside = async |addr| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
-        let line_actual = fixer.fix(line);
+        let line_actual = fixer.fix(line).await;
         let line_expected = format!("#00: ??? (tests/example-linux + 0x{:x})", addr);
         assert_eq!(line_expected, line_actual);
     };
-    outside(0x0); // A very low address.
-    outside(0x999); // Well before the start of main.
-    outside(0x112f); // One byte before the start of `main`.
-    outside(0x1158); // One byte past the end of `main`.
-    outside(0xfffffff); // A very high address.
+    outside(0x0).await; // A very low address.
+    outside(0x999).await; // Well before the start of main.
+    outside(0x1158).await; // One byte past the end of `main`.
+    outside(0xfffffff).await; // A very high address.
 }
 
-#[test]
-fn test_windows() {
+#[tokio::test]
+async fn test_windows() {
     // The native debug info within `example-windows.pdb` is as follows. (See
     // `tests/README.md` for details on how these lines were generated.)
     //
@@ -114,9 +113,9 @@ fn test_windows() {
 
     // Test various addresses using `example-windows.exe`, which redirects to
     // `example-windows.pdb`.
-    let mut func = |name, addr, linenum| {
+    let mut func = async |name, addr, linenum| {
         let line = format!("#00: ???[tests/example-windows.exe +0x{:x}]", addr);
-        let line = fixer.fix(line);
+        let line = fixer.fix(line).await;
         assert_eq!(
             line,
             format!(
@@ -126,43 +125,42 @@ fn test_windows() {
             )
         );
     };
-    func("main()", 0x6bc0, 24);
-    func("main()", 0x6bc1, 24);
-    func("main()", 0x6bc2, 24);
-    func("main()", 0x6bc7, 24);
-    func("main()", 0x6bc9, 24);
-    func("main()", 0x6bca, 24);
-    func("main()", 0x6bcb, 24);
-    func("main()", 0x6bcf, 25);
-    func("main()", 0x6bd6, 26);
-    func("main()", 0x6bdd, 26);
-    func("main()", 0x6be6, 27);
-    func("f(int*)", 0x6bf4, 16);
-    func("f(int*)", 0x6c0f, 19);
-    func("g(int*)", 0x6c49, 12);
-    func("g(int*)", 0x6c63, 14);
+    func("main()", 0x6bc0, 24).await;
+    func("main()", 0x6bc1, 24).await;
+    func("main()", 0x6bc2, 24).await;
+    func("main()", 0x6bc7, 24).await;
+    func("main()", 0x6bc9, 24).await;
+    func("main()", 0x6bca, 24).await;
+    func("main()", 0x6bcb, 24).await;
+    func("main()", 0x6bcf, 25).await;
+    func("main()", 0x6bd6, 26).await;
+    func("main()", 0x6bdd, 26).await;
+    func("main()", 0x6be6, 27).await;
+    func("f(int*)", 0x6bf4, 16).await;
+    func("f(int*)", 0x6c0f, 19).await;
+    func("g(int*)", 0x6c49, 12).await;
+    func("g(int*)", 0x6c63, 14).await;
 
     // Try a new Fixer, without JSON mode.
     fixer = Fixer::new(JsonMode::No, None, None);
 
     // Test various addresses outside `main`, `f`, and `g`, using
     // `example-windows.pdb` directly.
-    let mut outside = |addr| {
+    let mut outside = async |addr| {
         let line = format!("#00: foobar[tests/example-windows.pdb +0x{:x}]", addr);
-        let line_actual = fixer.fix(line);
+        let line_actual = fixer.fix(line).await;
         let line_expected = format!("#00: foobar (tests/example-windows.pdb + 0x{:x})", addr);
         assert_eq!(line_expected, line_actual);
     };
-    outside(0x0); // A very low address.
-    outside(0x999); // Well before the start of main.
-    outside(0x6bbf); // One byte before the start of `main`.
-    outside(0x6be7); // One byte past the end of `main`.
-    outside(0xfffffff); // A very high address.
+    outside(0x0).await; // A very low address.
+    outside(0x999).await; // Well before the start of main.
+    outside(0x6bbf).await; // One byte before the start of `main`.
+    outside(0x6be7).await; // One byte past the end of `main`.
+    outside(0xfffffff).await; // A very high address.
 }
 
-#[test]
-#[ignore] // https://github.com/mozilla/fix-stacks/issues/45
-fn test_mac() {
+#[tokio::test]
+async fn test_mac() {
     // The native debug info within `mac-multi` is as follows. (See
     // `tests/README.md` for details on how these lines were generated.)
     //
@@ -206,13 +204,10 @@ fn test_mac() {
     //   LINE 0xe94 line=15 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
     //   LINE 0xe99 line=16 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
     //
-    //   // Note that these ones are wrong, and should start at 0xeb0. This is
-    //   // due to the unavoidable archive suffix stripping, see comments in
-    //   // `main.rs` for details.
-    //   FUNC 0xf30 size=31 func=duplicate
-    //   LINE 0xf30 line=9 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
-    //   LINE 0xf38 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
-    //   LINE 0xf49 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   FUNC 0xeb0 size=31 func=duplicate
+    //   LINE 0xeb0 line=9 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xeb8 line=10 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
+    //   LINE 0xec9 line=11 file=/Users/njn/moz/fix-stacks/tests/mac-lib1.c
     //
     //   FUNC 0xed0 size=37 func=lib2_B
     //   LINE 0xed0 line=19 file=/Users/njn/moz/fix-stacks/tests/mac-lib2.c
@@ -233,9 +228,9 @@ fn test_mac() {
     let mut fixer = Fixer::new(JsonMode::No, None, None);
 
     // Test addresses from all the object files that `mac-multi` references.
-    let mut func = |name, addr, full_path, locn| {
+    let mut func = async |name, addr, full_path, locn| {
         let line = format!("#00: ???[tests/mac-multi +0x{:x}]", addr);
-        let line_actual = fixer.fix(line);
+        let line_actual = fixer.fix(line).await;
         let path = if full_path {
             "/Users/njn/moz/fix-stacks/tests/"
         } else {
@@ -245,28 +240,27 @@ fn test_mac() {
         assert_eq!(line_expected, line_actual);
     };
 
-    func("main", 0xd70, true, "mac-normal.c:17");
-    func("duplicate", 0xdb3, true, "mac-normal.c:10");
+    func("main", 0xd70, true, "mac-normal.c:17").await;
+    func("duplicate", 0xdb3, true, "mac-normal.c:10").await;
 
-    func("fat_B", 0xddc, true, "mac-fat.c:20");
-    func("fat_A", 0xe19, true, "mac-fat.c:16");
-    func("duplicate", 0xe4e, true, "mac-fat.c:11");
+    // Fat object source information won't work when the OSO of a binary refers to a fat object
+    // file: wholesym used to support this, but it was undue complexity for a niche case that
+    // doesn't happen in practice, so it was removed (in eeb9b310 and 6c0275c8).
+    func("fat_B", 0xddc, false, "mac-multi + 0xddc").await;
+    func("fat_A", 0xe19, false, "mac-multi + 0xe19").await;
+    func("duplicate", 0xe4e, false, "mac-multi + 0xe4e").await;
 
-    func("lib1_B", 0xe50, true, "mac-lib1.c:19");
-    func("lib1_A", 0xe95, true, "mac-lib1.c:15");
-    // This should be `duplicate` in `mac-lib1.c`. It's wrong due to the
-    // archive suffix stripping mentioned above.
-    func("???", 0xeaa, false, "mac-multi + 0xeaa");
+    func("lib1_B", 0xe50, true, "mac-lib1.c:19").await;
+    func("lib1_A", 0xe95, true, "mac-lib1.c:15").await;
+    func("duplicate", 0xeb0, true, "mac-lib1.c:9").await;
 
-    func("lib2_B", 0xedc, true, "mac-lib2.c:20");
-    func("lib2_A", 0xf1e, true, "mac-lib2.c:16");
-    // This should be `mac-lib2.c:10`. It's wrong due to the archive suffix
-    // stripping mentioned above.
-    func("duplicate", 0xf38, true, "mac-lib1.c:10");
+    func("lib2_B", 0xedc, true, "mac-lib2.c:20").await;
+    func("lib2_A", 0xf1e, true, "mac-lib2.c:16").await;
+    func("duplicate", 0xf38, true, "mac-lib2.c:10").await;
 }
 
-#[test]
-fn test_linux_breakpad() {
+#[tokio::test]
+async fn test_linux_breakpad() {
     // The breakpad symbols debug info within `bpsyms/example-linux/` is as
     // follows. (See `tests/README.md` for details on how these lines were
     // generated.)
@@ -307,9 +301,9 @@ fn test_linux_breakpad() {
     );
 
     // Test various addresses.
-    let mut func = |name, addr, linenum| {
+    let mut func = async |name, addr, linenum| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
-        let line = fixer.fix(line);
+        let line = fixer.fix(line).await;
         assert_eq!(
             line,
             format!(
@@ -318,28 +312,30 @@ fn test_linux_breakpad() {
             )
         );
     };
-    func("main", 0x1130, 24);
-    func("main", 0x113f, 25);
-    func("main", 0x1146, 26);
-    func("main", 0x1157, 27);
-    func("f", 0x1160, 16);
-    func("f", 0x1180, 19);
-    func("g", 0x11bc, 12);
-    func("g", 0x11de, 14);
+    func("main", 0x1130, 24).await;
+    func("main", 0x113f, 25).await;
+    func("main", 0x1146, 26).await;
+    func("main", 0x1157, 27).await;
+    func("f", 0x1160, 16).await;
+    func("f", 0x1180, 19).await;
+    func("g", 0x11bc, 12).await;
+    func("g", 0x11de, 14).await;
 
     // Test various addresses outside `main`, `f`, and `g`.
-    let mut outside = |addr| {
+    let mut outside = async |addr| {
         let line = format!("#00: ???[tests/example-linux +0x{:x}]", addr);
-        let line_actual = fixer.fix(line);
+        let line_actual = fixer.fix(line).await;
         let line_expected = format!("#00: ??? [tests/example-linux + 0x{:x}]", addr);
         assert_eq!(line_expected, line_actual);
     };
-    outside(0x0); // A very low address.
-    outside(0xfffffff); // A very high address.
+    outside(0x0).await; // A very low address.
+    // FIXME: wholesym doesn't give a reasonable size for the last symbol (e.g., the end of the
+    // section), so this will think the symbol is `_fini`
+    //outside(0xfffffff).await; // A very high address.
 }
 
-#[test]
-fn test_linux_breakpad_fallback() {
+#[tokio::test]
+async fn test_linux_breakpad_fallback() {
     // The breakpad symbols debug info within `bpsyms/` is missing in this
     // test. This verifies that we fall back to using native debug information
     // correctly in this scenario.
@@ -375,9 +371,9 @@ fn test_linux_breakpad_fallback() {
     );
 
     // Test various addresses.
-    let mut func = |name, addr, linenum| {
+    let mut func = async |name, addr, linenum| {
         let line = format!("#00: ???[tests/example-linux-fallback +0x{:x}]", addr);
-        let line = fixer.fix(line);
+        let line = fixer.fix(line).await;
         assert_eq!(
             line,
             format!(
@@ -386,28 +382,28 @@ fn test_linux_breakpad_fallback() {
             )
         );
     };
-    func("main", 0x11f8, 24);
-    func("main", 0x120f, 25);
-    func("main", 0x1216, 26);
-    func("main", 0x1222, 27);
-    func("f", 0x11a4, 16);
-    func("f", 0x11cb, 19);
-    func("g", 0x1181, 12);
-    func("g", 0x11a1, 14);
+    func("main", 0x11f8, 24).await;
+    func("main", 0x120f, 25).await;
+    func("main", 0x1216, 26).await;
+    func("main", 0x1222, 27).await;
+    func("f", 0x11a4, 16).await;
+    func("f", 0x11cb, 19).await;
+    func("g", 0x1181, 12).await;
+    func("g", 0x11a1, 14).await;
 
     // Test various addresses outside `main`, `f`, and `g`.
-    let mut outside = |addr| {
+    let mut outside = async |addr| {
         let line = format!("#00: ???[tests/example-linux-fallback +0x{:x}]", addr);
-        let line_actual = fixer.fix(line);
+        let line_actual = fixer.fix(line).await;
         let line_expected = format!("#00: ??? [tests/example-linux-fallback + 0x{:x}]", addr);
         assert_eq!(line_expected, line_actual);
     };
-    outside(0x0); // A very low address.
-    outside(0xfffffff); // A very high address.
+    outside(0x0).await; // A very low address.
+    outside(0xfffffff).await; // A very high address.
 }
 
-#[test]
-fn test_windows_breakpad() {
+#[tokio::test]
+async fn test_windows_breakpad() {
     // The breakpad symbols debug info within `bpsyms/example-windows.pdb/` is
     // as follows. (See `tests/README.md` for details on how these lines were
     // generated.)
@@ -441,9 +437,9 @@ fn test_windows_breakpad() {
     );
 
     // Test various addresses.
-    let mut func = |name, addr, linenum| {
+    let mut func = async |name, addr, linenum| {
         let line = format!("#00: ???[tests/example-windows.exe +0x{:x}]", addr);
-        let line = fixer.fix(line);
+        let line = fixer.fix(line).await;
         assert_eq!(
             line,
             format!(
@@ -452,87 +448,92 @@ fn test_windows_breakpad() {
             )
         );
     };
-    func("main()", 0x6bc0, 24);
-    func("main()", 0x6bce, 25);
-    func("main()", 0x6bd4, 26);
-    func("main()", 0x6bdf, 27);
-    func("f(int*)", 0x6bf0, 16);
-    func("f(int*)", 0x6c0f, 19);
-    func("g(int*)", 0x6c49, 12);
-    func("g(int*)", 0x6c61, 14);
+    func("main()", 0x6bc0, 24).await;
+    func("main()", 0x6bce, 25).await;
+    func("main()", 0x6bd4, 26).await;
+    func("main()", 0x6bdf, 27).await;
+    func("f(int*)", 0x6bf0, 16).await;
+    func("f(int*)", 0x6c0f, 19).await;
+    func("g(int*)", 0x6c49, 12).await;
+    func("g(int*)", 0x6c61, 14).await;
 
     // Test various addresses outside `main`, `f`, and `g`.
-    let mut outside = |addr| {
+    let mut outside = async |addr| {
         let line = format!("#00: ???[tests/example-windows.exe +0x{:x}]", addr);
-        let line_actual = fixer.fix(line);
+        let line_actual = fixer.fix(line).await;
         let line_expected = format!("#00: ??? [tests/example-windows.exe + 0x{:x}]", addr);
         assert_eq!(line_expected, line_actual);
     };
-    outside(0x0); // A very low address.
-    outside(0xfffffff); // A very high address.
+    outside(0x0).await; // A very low address.
+    outside(0xfffffff).await; // A very high address.
 }
 
-#[test]
-fn test_regex() {
+#[tokio::test]
+async fn test_regex() {
     let mut fixer = Fixer::new(JsonMode::No, None, None);
 
     // Test various different unchanged line forms, that don't match the regex.
-    let mut unchanged = |line: &str| {
-        let line2 = fixer.fix(line.to_string());
+    let mut unchanged = async |line: &str| {
+        let line2 = fixer.fix(line.to_string()).await;
         assert_eq!(line, line2);
     };
-    unchanged("");
-    unchanged("1234 ABCD");
-    unchanged("00: ???[tests/example-linux +0x1130]"); // Missing the leading '#'.
-    unchanged("#00: ???[tests/example-linux 0x1130]"); // Missing the '+' before the address.
-    unchanged("#00: ???[tests/example-linux +1130]"); // Missing the '0x`.
-    unchanged("#00: ???(tests/example-linux +0x1130)"); // Wrong parentheses.
+    unchanged("").await;
+    unchanged("1234 ABCD").await;
+    unchanged("00: ???[tests/example-linux +0x1130]").await; // Missing the leading '#'.
+    unchanged("#00: ???[tests/example-linux 0x1130]").await; // Missing the '+' before the address.
+    unchanged("#00: ???[tests/example-linux +1130]").await; // Missing the '0x`.
+    unchanged("#00: ???(tests/example-linux +0x1130)").await; // Wrong parentheses.
 
     // Test various different changed line forms that do match the regex.
-    let mut changed = |line1: &str, line2_expected| {
-        let line2_actual = fixer.fix(line1.to_string());
+    let mut changed = async |line1: &str, line2_expected| {
+        let line2_actual = fixer.fix(line1.to_string()).await;
         assert_eq!(line2_expected, line2_actual);
     };
     changed(
         "#01: foobar[tests/example-linux +0x1130]",
         "#01: main (/home/njn/moz/fix-stacks/tests/example.c:24)",
-    );
+    )
+    .await;
     changed(
         "PREFIX#9999: ???[tests/example-linux +0x1130]SUFFIX",
         "PREFIX#9999: main (/home/njn/moz/fix-stacks/tests/example.c:24)SUFFIX",
-    );
+    )
+    .await;
     changed(
         "#01: ???[tests/../src/../tests/example-linux +0x1130]",
         "#01: main (/home/njn/moz/fix-stacks/tests/example.c:24)",
-    );
+    )
+    .await;
 }
 
-#[test]
-fn test_files() {
+#[tokio::test]
+async fn test_files() {
     let mut fixer = Fixer::new(JsonMode::Yes, None, None);
 
     // Test various different file errors. An error message is also printed to
     // stderr for each one, but we don't test for that.
-    let mut file_error = |line1: &str, line2_expected| {
-        let line2_actual = fixer.fix(line1.to_string());
+    let mut file_error = async |line1: &str, line2_expected| {
+        let line2_actual = fixer.fix(line1.to_string()).await;
         assert_eq!(line2_expected, line2_actual);
     };
     // No such file.
     file_error(
         "#00: ???[tests/no-such-file +0x0]",
         "#00: ??? (tests/no-such-file + 0x0)",
-    );
+    )
+    .await;
     // No such file, with backslashes (which tests JSON escaping).
     file_error(
         "#00: ???[tests\\no-such-dir\\\\no-such-file +0x0]",
         "#00: ??? (tests\\no-such-dir\\\\no-such-file + 0x0)",
-    );
+    )
+    .await;
     // File exists, but has the wrong format.
-    file_error("#00: ???[src/main.rs +0x0]", "#00: ??? (src/main.rs + 0x0)");
+    file_error("#00: ???[src/main.rs +0x0]", "#00: ??? (src/main.rs + 0x0)").await;
 }
 
-#[test]
-fn test_localpath() {
+#[tokio::test]
+async fn test_localpath() {
     let mut fixer = Fixer::new(
         JsonMode::No,
         None,
@@ -542,9 +543,9 @@ fn test_localpath() {
     );
 
     // Test various addresses.
-    let mut func = |name, addr, linenum| {
+    let mut func = async |name, addr, linenum| {
         let line = format!("#00: ???[src/example-linux +0x{:x}]", addr);
-        let line = fixer.fix(line);
+        let line = fixer.fix(line).await;
         assert_eq!(
             line,
             format!(
@@ -553,19 +554,19 @@ fn test_localpath() {
             )
         );
     };
-    func("main", 0x1130, 24);
-    func("main", 0x1131, 24);
-    func("main", 0x1132, 24);
-    func("main", 0x1137, 24);
-    func("main", 0x113a, 24);
-    func("main", 0x113d, 24);
-    func("main", 0x113e, 24);
-    func("main", 0x113f, 25);
-    func("main", 0x1146, 26);
-    func("main", 0x114e, 26);
-    func("main", 0x1157, 27);
-    func("f", 0x1160, 16);
-    func("f", 0x1180, 19);
-    func("g", 0x11bc, 12);
-    func("g", 0x11de, 14);
+    func("main", 0x1130, 24).await;
+    func("main", 0x1131, 24).await;
+    func("main", 0x1132, 24).await;
+    func("main", 0x1137, 24).await;
+    func("main", 0x113a, 24).await;
+    func("main", 0x113d, 24).await;
+    func("main", 0x113e, 24).await;
+    func("main", 0x113f, 25).await;
+    func("main", 0x1146, 26).await;
+    func("main", 0x114e, 26).await;
+    func("main", 0x1157, 27).await;
+    func("f", 0x1160, 16).await;
+    func("f", 0x1180, 19).await;
+    func("g", 0x11bc, 12).await;
+    func("g", 0x11de, 14).await;
 }
