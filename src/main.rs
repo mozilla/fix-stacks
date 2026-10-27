@@ -229,7 +229,7 @@ impl Fixer {
         // In JSON mode, we need to escape any new strings we produce. However, strings from the
         // input (i.e. `in_func_name` and `in_file_name`), will already be escaped, so if they are
         // used in the output they shouldn't be re-escaped.
-        if let Some(address_info) = dbg!(map.lookup(LookupAddress::Relative(address)).await) {
+        if let Some(address_info) = map.lookup(LookupAddress::Relative(address)).await {
             let raw_out_func_name = address_info.symbol.name;
 
             let out_func_name = if let JsonMode::Yes = self.json_mode {
